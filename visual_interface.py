@@ -7,7 +7,7 @@ import proto.robot_comm_pb2 as proto
 
 
 class RobotInterface:
-    def __init__(self, msg_queue, UDP_IP="255.255.255.255", UDP_PORT=5000, TCP_IP="0.0.0.0", TCP_PORT=5001):
+    def __init__(self, msg_queue, UDP_IP="192.168.142.255", UDP_PORT=5000, TCP_IP="0.0.0.0", TCP_PORT=5001):
         self.running = True
         self.msg_queue = msg_queue
         self.UDP_IP = UDP_IP
