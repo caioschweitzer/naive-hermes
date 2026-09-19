@@ -36,10 +36,15 @@ message InfoResponse {
 
 // 4 - Telemetria
 message Telemetry {
-    repeated float wheel_speeds = 1;
-    repeated float kicker_voltages = 2;
-    float battery_voltage = 3;
-    bool ball_sensor = 4;
+    repeated float wheel_speeds = 1;     // Velocidade das 4 rodas (rad/s ou m/s)
+    repeated float kicker_voltages = 2;  // Tensões dos capacitores de chute
+    float battery_voltage = 3;           // Tensão da bateria (V)
+    bool ball_sensor = 4;                // Sensor infravermelho de posse de bola
+
+    float roll = 5;       // Inclinação lateral em radianos [-pi, +pi]
+    float pitch = 6;      // Inclinação frontal em radianos [-pi/2, +pi/2]
+    float yaw = 7;        // Orientação no plano do campo em radianos [-pi, +pi]
+    float gyro_z = 8;     // Velocidade angular de rotação em rad/s
 }
 
 // MENSAGEM PRINCIPAL (Wrapper)
