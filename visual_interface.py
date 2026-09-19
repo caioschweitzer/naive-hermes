@@ -172,6 +172,9 @@ class RobotDashboard(ctk.CTk):
         lbl_wheels = ctk.CTkLabel(tele_f, text="⚙️ Rodas: [--]")
         lbl_wheels.grid(row=0, column=2, sticky="w")
 
+        lbl_imu = ctk.CTkLabel(tele_f, text="🧭 IMU: Roll: -- | Pitch: -- | Yaw: -- | Gyro Z: --")
+        lbl_imu.grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 0))
+
         # --- CONFIGURAÇÃO E REQUESTS ---
         actions_f = ctk.CTkFrame(panel, fg_color="transparent")
         actions_f.pack(fill="x", padx=20, pady=5)
@@ -208,7 +211,7 @@ class RobotDashboard(ctk.CTk):
         switch_drive.grid(row=0, column=4, padx=10)
 
         self.robots_ui[robot_id] = {
-            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_resp": lbl_resp,
+            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu, "lbl_resp": lbl_resp,
             "ent_speed": ent_speed, "lbl_current_v": lbl_curr, "switch_drive": switch_drive,
             "is_driving": False
         }
@@ -285,6 +288,12 @@ class RobotDashboard(ctk.CTk):
                 ui["lbl_wheels"].configure(text=f"⚙️ Rodas: [{wheels_str}]")
             else:
                 ui["lbl_wheels"].configure(text="⚙️ Rodas: [--]")
+
+            r = getattr(t, 'roll', 0.0)
+            p = getattr(t, 'pitch', 0.0)
+            y = getattr(t, 'yaw', 0.0)
+            gz = getattr(t, 'gyro_z', 0.0)
+            ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
 
         elif ptype == 'response':
             r = packet.response

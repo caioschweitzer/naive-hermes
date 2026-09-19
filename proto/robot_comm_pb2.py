@@ -13,15 +13,15 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10robot_comm.proto\"\\\n\rMotionCommand\x12\r\n\x05vel_x\x18\x01 \x01(\x02\x12\r\n\x05vel_y\x18\x02 \x01(\x02\x12\r\n\x05vel_w\x18\x03 \x01(\x02\x12\x0e\n\x06kick_h\x18\x04 \x01(\r\x12\x0e\n\x06kick_v\x18\x05 \x01(\r\"D\n\rConfigCommand\x12\x10\n\x08param_id\x18\x01 \x01(\r\x12\r\n\x05value\x18\x02 \x01(\x02\x12\x12\n\ntext_value\x18\x03 \x01(\t\"!\n\x0bInfoRequest\x12\x12\n\ninfo_index\x18\x01 \x01(\r\"E\n\x0cInfoResponse\x12\x12\n\ninfo_index\x18\x01 \x01(\r\x12\r\n\x05value\x18\x02 \x01(\x02\x12\x12\n\ntext_value\x18\x03 \x01(\t\"h\n\tTelemetry\x12\x14\n\x0cwheel_speeds\x18\x01 \x03(\x02\x12\x17\n\x0fkicker_voltages\x18\x02 \x03(\x02\x12\x17\n\x0f\x62\x61ttery_voltage\x18\x03 \x01(\x02\x12\x13\n\x0b\x62\x61ll_sensor\x18\x04 \x01(\x08\"\xf0\x01\n\x0bRobotPacket\x12\x10\n\x08robot_id\x18\x01 \x01(\r\x12 \n\x06motion\x18\x02 \x01(\x0b\x32\x0e.MotionCommandH\x00\x12 \n\x06\x63onfig\x18\x03 \x01(\x0b\x32\x0e.ConfigCommandH\x00\x12\x1f\n\x07request\x18\x04 \x01(\x0b\x32\x0c.InfoRequestH\x00\x12!\n\x08response\x18\x05 \x01(\x0b\x32\r.InfoResponseH\x00\x12\x1f\n\ttelemetry\x18\x06 \x01(\x0b\x32\n.TelemetryH\x00\x12\x1b\n\x05\x61lert\x18\x07 \x01(\x0e\x32\n.AlertTypeH\x00\x42\t\n\x07payload*4\n\tAlertType\x12\x0f\n\x0bLOW_BATTERY\x10\x00\x12\x16\n\x12KICKER_OVERVOLTAGE\x10\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10robot_comm.proto\"\\\n\rMotionCommand\x12\r\n\x05vel_x\x18\x01 \x01(\x02\x12\r\n\x05vel_y\x18\x02 \x01(\x02\x12\r\n\x05vel_w\x18\x03 \x01(\x02\x12\x0e\n\x06kick_h\x18\x04 \x01(\r\x12\x0e\n\x06kick_v\x18\x05 \x01(\r\"D\n\rConfigCommand\x12\x10\n\x08param_id\x18\x01 \x01(\r\x12\r\n\x05value\x18\x02 \x01(\x02\x12\x12\n\ntext_value\x18\x03 \x01(\t\"!\n\x0bInfoRequest\x12\x12\n\ninfo_index\x18\x01 \x01(\r\"E\n\x0cInfoResponse\x12\x12\n\ninfo_index\x18\x01 \x01(\r\x12\r\n\x05value\x18\x02 \x01(\x02\x12\x12\n\ntext_value\x18\x03 \x01(\t\"\xa2\x01\n\tTelemetry\x12\x14\n\x0cwheel_speeds\x18\x01 \x03(\x02\x12\x17\n\x0fkicker_voltages\x18\x02 \x03(\x02\x12\x17\n\x0f\x62\x61ttery_voltage\x18\x03 \x01(\x02\x12\x13\n\x0b\x62\x61ll_sensor\x18\x04 \x01(\x08\x12\x0c\n\x04roll\x18\x05 \x01(\x02\x12\r\n\x05pitch\x18\x06 \x01(\x02\x12\x0b\n\x03yaw\x18\x07 \x01(\x02\x12\x0e\n\x06gyro_z\x18\x08 \x01(\x02\"\xf0\x01\n\x0bRobotPacket\x12\x10\n\x08robot_id\x18\x01 \x01(\r\x12 \n\x06motion\x18\x02 \x01(\x0b\x32\x0e.MotionCommandH\x00\x12 \n\x06\x63onfig\x18\x03 \x01(\x0b\x32\x0e.ConfigCommandH\x00\x12\x1f\n\x07request\x18\x04 \x01(\x0b\x32\x0c.InfoRequestH\x00\x12!\n\x08response\x18\x05 \x01(\x0b\x32\r.InfoResponseH\x00\x12\x1f\n\ttelemetry\x18\x06 \x01(\x0b\x32\n.TelemetryH\x00\x12\x1b\n\x05\x61lert\x18\x07 \x01(\x0e\x32\n.AlertTypeH\x00\x42\t\n\x07payload*4\n\tAlertType\x12\x0f\n\x0bLOW_BATTERY\x10\x00\x12\x16\n\x12KICKER_OVERVOLTAGE\x10\x01\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'robot_comm_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _ALERTTYPE._serialized_start=639
-  _ALERTTYPE._serialized_end=691
+  _ALERTTYPE._serialized_start=698
+  _ALERTTYPE._serialized_end=750
   _MOTIONCOMMAND._serialized_start=20
   _MOTIONCOMMAND._serialized_end=112
   _CONFIGCOMMAND._serialized_start=114
@@ -30,8 +30,8 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _INFOREQUEST._serialized_end=217
   _INFORESPONSE._serialized_start=219
   _INFORESPONSE._serialized_end=288
-  _TELEMETRY._serialized_start=290
-  _TELEMETRY._serialized_end=394
-  _ROBOTPACKET._serialized_start=397
-  _ROBOTPACKET._serialized_end=637
+  _TELEMETRY._serialized_start=291
+  _TELEMETRY._serialized_end=453
+  _ROBOTPACKET._serialized_start=456
+  _ROBOTPACKET._serialized_end=696
 # @@protoc_insertion_point(module_scope)
