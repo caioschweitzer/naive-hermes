@@ -240,14 +240,14 @@ class RobotDashboard(ctk.CTk):
             vx, vy, vw = 0.0, 0.0, 0.0
 
             if self.keys_pressed["w"]:
-                vx = max_s
+                vy = max_s
             elif self.keys_pressed["s"]:
-                vx = -max_s
+                vy = -max_s
 
             if self.keys_pressed["d"]:
-                vy = max_s
+                vx = max_s
             elif self.keys_pressed["a"]:
-                vy = -max_s
+                vx = -max_s
 
             if self.keys_pressed["q"]:
                 vw = max_s
