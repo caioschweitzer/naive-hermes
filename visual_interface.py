@@ -490,6 +490,9 @@ class RobotDashboard(ctk.CTk):
         lbl_exp = ctk.CTkLabel(tele_f, text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s", text_color="#5dade2")
         lbl_exp.grid(row=0, column=3, sticky="w")
 
+        lbl_imu = ctk.CTkLabel(tele_f, text="🧭 IMU: Roll: -- | Pitch: -- | Yaw: -- | Gyro Z: --")
+        lbl_imu.grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 0))
+
         # --- CONFIGURAÇÃO E REQUESTS ---
         actions_f = ctk.CTkFrame(panel, fg_color="transparent")
         actions_f.pack(fill="x", padx=20, pady=5)
@@ -528,7 +531,7 @@ class RobotDashboard(ctk.CTk):
         switch_drive.grid(row=0, column=4, padx=10)
 
         self.robots_ui[robot_id] = {
-            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_resp": lbl_resp,
+            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu, "lbl_resp": lbl_resp,
             "ent_speed": ent_speed, "lbl_current_v": lbl_curr, "lbl_expected_wheels": lbl_exp,
             "switch_drive": switch_drive, "is_driving": False, "drive_timer_id": None,
             "latest_motion": (0.0, 0.0, 0.0), "latest_exp": [0.0, 0.0, 0.0, 0.0],
@@ -645,6 +648,12 @@ class RobotDashboard(ctk.CTk):
 
             history = self.robots_history.setdefault(packet.robot_id, RobotDataHistory())
             history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"])
+
+            r = getattr(t, 'roll', 0.0)
+            p = getattr(t, 'pitch', 0.0)
+            y = getattr(t, 'yaw', 0.0)
+            gz = getattr(t, 'gyro_z', 0.0)
+            ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
 
         elif ptype == 'response':
             r = packet.response
