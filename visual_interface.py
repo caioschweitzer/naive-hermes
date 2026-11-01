@@ -13,6 +13,161 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import proto.robot_comm_pb2 as proto
 
+# Mapeamento de erros (máscaras de bits) para metadados visuais e severidade
+ROBOT_ERRORS_CONFIG = {
+    proto.ERR_CRITICAL_BATTERY: {
+        "name": "ERR_CRITICAL_BATTERY",
+        "label": "Bateria Crítica",
+        "badge": "🪫 BAT CRÍTICA",
+        "severity": "critical",
+        "fg_color": "#78281F",
+        "text_color": "#FADBD8",
+        "border_color": "#E74C3C"
+    },
+    proto.ERR_KICKER_OVERVOLTAGE: {
+        "name": "ERR_KICKER_OVERVOLTAGE",
+        "label": "Sobretensão Chute",
+        "badge": "⚡ SOBRETENSÃO",
+        "severity": "critical",
+        "fg_color": "#78281F",
+        "text_color": "#FADBD8",
+        "border_color": "#E74C3C"
+    },
+    proto.ERR_ROBOT_FLIPPED: {
+        "name": "ERR_ROBOT_FLIPPED",
+        "label": "Robô Tombado",
+        "badge": "🔄 TOMBADO",
+        "severity": "critical",
+        "fg_color": "#78281F",
+        "text_color": "#FADBD8",
+        "border_color": "#E74C3C"
+    },
+    proto.ERR_STM32_TIMEOUT: {
+        "name": "ERR_STM32_TIMEOUT",
+        "label": "STM32 Timeout",
+        "badge": "🔌 STM32 TIMEOUT",
+        "severity": "critical",
+        "fg_color": "#78281F",
+        "text_color": "#FADBD8",
+        "border_color": "#E74C3C"
+    },
+    proto.ERR_LOW_BATTERY: {
+        "name": "ERR_LOW_BATTERY",
+        "label": "Bateria Baixa",
+        "badge": "⚠️ BAT BAIXA",
+        "severity": "warning",
+        "fg_color": "#7E5109",
+        "text_color": "#FDEBD0",
+        "border_color": "#F39C12"
+    },
+    proto.ERR_IMU_FAIL: {
+        "name": "ERR_IMU_FAIL",
+        "label": "Falha no MPU",
+        "badge": "🧭 MPU FAIL",
+        "severity": "warning",
+        "fg_color": "#7E5109",
+        "text_color": "#FDEBD0",
+        "border_color": "#F39C12"
+    },
+    proto.ERR_MOTOR_1_STALL: {
+        "name": "ERR_MOTOR_1_STALL",
+        "label": "Motor 1 Travado",
+        "badge": "🛑 STALL M1",
+        "severity": "warning",
+        "fg_color": "#6E2C00",
+        "text_color": "#EDBB99",
+        "border_color": "#E67E22"
+    },
+    proto.ERR_MOTOR_2_STALL: {
+        "name": "ERR_MOTOR_2_STALL",
+        "label": "Motor 2 Travado",
+        "badge": "🛑 STALL M2",
+        "severity": "warning",
+        "fg_color": "#6E2C00",
+        "text_color": "#EDBB99",
+        "border_color": "#E67E22"
+    },
+    proto.ERR_MOTOR_3_STALL: {
+        "name": "ERR_MOTOR_3_STALL",
+        "label": "Motor 3 Travado",
+        "badge": "🛑 STALL M3",
+        "severity": "warning",
+        "fg_color": "#6E2C00",
+        "text_color": "#EDBB99",
+        "border_color": "#E67E22"
+    },
+    proto.ERR_MOTOR_4_STALL: {
+        "name": "ERR_MOTOR_4_STALL",
+        "label": "Motor 4 Travado",
+        "badge": "🛑 STALL M4",
+        "severity": "warning",
+        "fg_color": "#6E2C00",
+        "text_color": "#EDBB99",
+        "border_color": "#E67E22"
+    },
+    proto.ERR_BALL_SENSOR_DIRTY: {
+        "name": "ERR_BALL_SENSOR_DIRTY",
+        "label": "Sensor de Bola Sujo",
+        "badge": "⚽ SENSOR BOLA",
+        "severity": "info",
+        "fg_color": "#1B4F72",
+        "text_color": "#D4E6F1",
+        "border_color": "#3498DB"
+    },
+}
+
+def parse_robot_error_flags(error_flags: int):
+    """
+    Decodifica a máscara de bits e retorna lista de metadados dos erros ativos.
+    Possui fallback automático para novos enums do Protobuf caso surjam no futuro.
+    """
+    if not error_flags:
+        return []
+
+    active_errors = []
+    for bit_mask, meta in ROBOT_ERRORS_CONFIG.items():
+        if error_flags & bit_mask:
+            active_errors.append(meta)
+
+    # Fallback dinâmico para novos bits não catalogados no dicionário
+    known_mask = 0
+    for bit_mask in ROBOT_ERRORS_CONFIG.keys():
+        known_mask |= bit_mask
+
+    unrecognized_bits = error_flags & (~known_mask)
+    if unrecognized_bits:
+        for val in proto.RobotError.values():
+            if val != 0 and (unrecognized_bits & val):
+                try:
+                    name = proto.RobotError.Name(val)
+                except Exception:
+                    name = f"ERR_0x{val:X}"
+                active_errors.append({
+                    "name": name,
+                    "label": name.replace("ERR_", "").replace("_", " "),
+                    "badge": f"⚠️ {name.replace('ERR_', '')}",
+                    "severity": "warning",
+                    "fg_color": "#7E5109",
+                    "text_color": "#FDEBD0",
+                    "border_color": "#F39C12"
+                })
+                unrecognized_bits &= ~val
+
+        if unrecognized_bits:
+            active_errors.append({
+                "name": f"UNKNOWN_0x{unrecognized_bits:X}",
+                "label": f"Erro 0x{unrecognized_bits:X}",
+                "badge": f"⚠️ 0x{unrecognized_bits:X}",
+                "severity": "warning",
+                "fg_color": "#5D6D7E",
+                "text_color": "#EAECEE",
+                "border_color": "#BDC3C7"
+            })
+
+    return active_errors
+
+ROBOT_TIMEOUT_SECONDS = 3.0  # Tempo limite (s) sem pacotes para considerar robô desconectado
+
 # Parâmetros físicos padrão de robô SSL (Small Size League - RoboCup)
 ROBOT_RADIUS_R = 0.0915   # Distância do centro do robô ao centro da roda (m)
 WHEEL_RADIUS_Rr = 0.020    # Raio da roda omnidirecional (m)
@@ -327,6 +482,7 @@ class RobotInterface:
                 break
 
     def _handle_robot_client(self, client_socket, addr):
+        associated_robots = set()
         with client_socket:
             while self.running:
                 try:
@@ -340,9 +496,13 @@ class RobotInterface:
                         data += chunk
                     packet = proto.RobotPacket()
                     packet.ParseFromString(data)
+                    associated_robots.add(packet.robot_id)
                     self.msg_queue.put(packet)
                 except:
                     break
+        # Notifica a interface imediatamente sobre a desconexão do socket dos robôs associados
+        for rid in associated_robots:
+            self.msg_queue.put(("ROBOT_DISCONNECTED", rid))
 
     def broadcast_TCP_IP(self, ip: str):
         self.send_config_command(0xFF, 1, ip)
@@ -467,10 +627,15 @@ class RobotDashboard(ctk.CTk):
         panel = ctk.CTkFrame(self.scrollable_frame, corner_radius=15)
         panel.pack(fill="x", pady=10)
 
-        # Cabeçalho do robô com ID e botão do gráfico
+        # Cabeçalho do robô com ID, badges de status e botão do gráfico
         title_f = ctk.CTkFrame(panel, fg_color="transparent")
         title_f.pack(fill="x", padx=20, pady=(15, 5))
         ctk.CTkLabel(title_f, text=f"🤖 Robô ID: {robot_id}", font=("Roboto", 18, "bold"), text_color="#1f6aa5").pack(side="left")
+
+        # Container para os badges dinâmicos de status/alerta
+        badge_container = ctk.CTkFrame(title_f, fg_color="transparent")
+        badge_container.pack(side="left", padx=(12, 0))
+
         ctk.CTkButton(title_f, text="📈 Abrir Gráfico", width=120, height=28, fg_color="#1f6aa5", hover_color="#144870",
                       command=lambda: self._open_robot_plot(robot_id)).pack(side="right")
 
@@ -531,13 +696,149 @@ class RobotDashboard(ctk.CTk):
         switch_drive.grid(row=0, column=4, padx=10)
 
         self.robots_ui[robot_id] = {
+            "panel": panel, "badge_container": badge_container, "current_error_flags": None,
+            "last_packet_time": None, "is_connected": False,
             "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu, "lbl_resp": lbl_resp,
             "ent_speed": ent_speed, "lbl_current_v": lbl_curr, "lbl_expected_wheels": lbl_exp,
             "switch_drive": switch_drive, "is_driving": False, "drive_timer_id": None,
             "latest_motion": (0.0, 0.0, 0.0), "latest_exp": [0.0, 0.0, 0.0, 0.0],
             "latest_real": [0.0, 0.0, 0.0, 0.0], "latest_bat": 0.0, "latest_kicker": 0.0
         }
+        # Inicia aguardando conexão
+        lbl_waiting = ctk.CTkLabel(
+            badge_container,
+            text="⏳ AGUARDANDO",
+            font=("Roboto", 11, "bold"),
+            fg_color="#2C3E50",
+            text_color="#BDC3C7",
+            corner_radius=8,
+            padx=8,
+            pady=2
+        )
+        lbl_waiting.pack(side="left", padx=2)
         return self.robots_ui[robot_id]
+
+    def _handle_robot_disconnect(self, robot_id):
+        """Dispara o alerta local de robô desconectado na interface."""
+        if robot_id not in self.robots_ui:
+            return
+        ui = self.robots_ui[robot_id]
+
+        # Se já estava marcado como desconectado, não recria widgets
+        if not ui.get("is_connected", False) and ui.get("last_packet_time") is not None:
+            return
+
+        ui["is_connected"] = False
+        ui["current_error_flags"] = None
+        panel = ui["panel"]
+        badge_container = ui["badge_container"]
+
+        for child in badge_container.winfo_children():
+            child.destroy()
+
+        lbl_disc = ctk.CTkLabel(
+            badge_container,
+            text="🔌 DESCONECTADO",
+            font=("Roboto", 11, "bold"),
+            fg_color="#641E16",
+            text_color="#FADBD8",
+            corner_radius=8,
+            padx=8,
+            pady=2
+        )
+        lbl_disc.pack(side="left", padx=2)
+        panel.configure(border_width=2, border_color="#922B21")
+
+    def _update_robot_status_badge(self, robot_id, error_flags, is_alert=False):
+        """Atualiza dinamicamente os badges de status e a borda do card do robô."""
+        if robot_id not in self.robots_ui:
+            return
+        ui = self.robots_ui[robot_id]
+
+        # Evita reconstruir widgets se não houve mudança de estado (a menos que seja um alerta explícito)
+        if not is_alert and ui.get("current_error_flags") == error_flags:
+            return
+
+        ui["current_error_flags"] = error_flags
+        badge_container = ui["badge_container"]
+        panel = ui["panel"]
+
+        # Limpa badges anteriores
+        for child in badge_container.winfo_children():
+            child.destroy()
+
+        active_errors = parse_robot_error_flags(error_flags)
+
+        if not active_errors:
+            # Estado normal: Badge verde discreto e sem borda de alerta
+            lbl_ok = ctk.CTkLabel(
+                badge_container,
+                text="🟢 OK",
+                font=("Roboto", 11, "bold"),
+                fg_color="#143b23",
+                text_color="#2ecc71",
+                corner_radius=8,
+                padx=8,
+                pady=2
+            )
+            lbl_ok.pack(side="left", padx=2)
+            panel.configure(border_width=0)
+        else:
+            # Define destaque da borda baseado na severidade máxima
+            has_critical = any(e.get("severity") == "critical" for e in active_errors)
+            has_warning = any(e.get("severity") == "warning" for e in active_errors)
+
+            if has_critical:
+                border_color = "#E74C3C"
+            elif has_warning:
+                border_color = "#F39C12"
+            else:
+                border_color = "#3498DB"
+
+            panel.configure(border_width=2, border_color=border_color)
+
+            # Se veio de um pacote assíncrono de alerta, adiciona tag indicativa
+            if is_alert:
+                lbl_alert_tag = ctk.CTkLabel(
+                    badge_container,
+                    text="⚡ ALERTA",
+                    font=("Roboto", 10, "bold"),
+                    fg_color="#922B21",
+                    text_color="#FADBD8",
+                    corner_radius=6,
+                    padx=6,
+                    pady=2
+                )
+                lbl_alert_tag.pack(side="left", padx=(0, 4))
+
+            # Exibe os badges dos erros (limite de 3 para manter o layout limpo)
+            max_visible = 3
+            for err in active_errors[:max_visible]:
+                b = ctk.CTkLabel(
+                    badge_container,
+                    text=err.get("badge", err.get("label", "ERRO")),
+                    font=("Roboto", 11, "bold"),
+                    fg_color=err.get("fg_color", "#78281F"),
+                    text_color=err.get("text_color", "#FFFFFF"),
+                    corner_radius=8,
+                    padx=8,
+                    pady=2
+                )
+                b.pack(side="left", padx=3)
+
+            if len(active_errors) > max_visible:
+                remaining = len(active_errors) - max_visible
+                b_more = ctk.CTkLabel(
+                    badge_container,
+                    text=f"+{remaining}",
+                    font=("Roboto", 10, "bold"),
+                    fg_color="#424949",
+                    text_color="#E5E8E8",
+                    corner_radius=8,
+                    padx=6,
+                    pady=2
+                )
+                b_more.pack(side="left", padx=2)
 
     def _send_config(self, robot_id, cb_text, val_str):
         if not val_str: return
@@ -618,14 +919,29 @@ class RobotDashboard(ctk.CTk):
     def process_queue(self):
         while not self.msg_queue.empty():
             try:
-                pkt = self.msg_queue.get_nowait()
-                self._update_ui_from_packet(pkt)
+                item = self.msg_queue.get_nowait()
+                if isinstance(item, tuple) and item[0] == "ROBOT_DISCONNECTED":
+                    self._handle_robot_disconnect(item[1])
+                else:
+                    self._update_ui_from_packet(item)
             except:
                 break
+        self._check_timeouts()
         self.after(100, self.process_queue)
+
+    def _check_timeouts(self):
+        """Verifica se algum robô previamente conectado excedeu o timeout de heartbeat."""
+        now = time.time()
+        for robot_id, ui in self.robots_ui.items():
+            last_t = ui.get("last_packet_time")
+            if last_t is not None and ui.get("is_connected", False):
+                if now - last_t > ROBOT_TIMEOUT_SECONDS:
+                    self._handle_robot_disconnect(robot_id)
 
     def _update_ui_from_packet(self, packet):
         ui = self._get_or_create_robot_panel(packet.robot_id)
+        ui["last_packet_time"] = time.time()
+        ui["is_connected"] = True
         ptype = packet.WhichOneof("payload")
 
         if ptype == 'telemetry':
@@ -654,6 +970,15 @@ class RobotDashboard(ctk.CTk):
             y = getattr(t, 'yaw', 0.0)
             gz = getattr(t, 'gyro_z', 0.0)
             ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
+
+            # Atualiza badges de erro via telemetria periódica
+            err_flags = int(getattr(t, 'error_flags', 0))
+            self._update_robot_status_badge(packet.robot_id, err_flags)
+
+        elif ptype == 'alert':
+            # Pacote assíncrono de alerta imediato contendo error_flags
+            err_flags = int(packet.alert)
+            self._update_robot_status_badge(packet.robot_id, err_flags, is_alert=True)
 
         elif ptype == 'response':
             r = packet.response

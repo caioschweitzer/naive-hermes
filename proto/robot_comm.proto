@@ -1,9 +1,20 @@
 syntax = "proto3";
+import "nanopb.proto";
 
-// 5 - Alertas
-enum AlertType {
-    LOW_BATTERY = 0;
-    KICKER_OVERVOLTAGE = 1;
+// 5 - Alertas e Erros (Máscaras de bits para error_flags)
+enum RobotError {
+    ERR_NONE = 0;
+    ERR_LOW_BATTERY = 1;          // Bit 0 (0x0001): Tensão baixa de bateria
+    ERR_CRITICAL_BATTERY = 2;     // Bit 1 (0x0002): Bateria em nível crítico
+    ERR_KICKER_OVERVOLTAGE = 4;   // Bit 2 (0x0004): Sobretensão nos capacitores de chute
+    ERR_MOTOR_1_STALL = 8;        // Bit 3 (0x0008): Motor 1 travado
+    ERR_MOTOR_2_STALL = 16;       // Bit 4 (0x0010): Motor 2 travado
+    ERR_MOTOR_3_STALL = 32;       // Bit 5 (0x0020): Motor 3 travado
+    ERR_MOTOR_4_STALL = 64;       // Bit 6 (0x0040): Motor 4 travado
+    ERR_STM32_TIMEOUT = 128;      // Bit 7 (0x0080): Perda de comunicação UART com STM32
+    ERR_IMU_FAIL = 256;           // Bit 8 (0x0100): Falha ou desconexão do MPU-6050
+    ERR_ROBOT_FLIPPED = 512;      // Bit 9 (0x0200): Robô tombado/capotado (|roll| ou |pitch| > 60°)
+    ERR_BALL_SENSOR_DIRTY = 1024; // Bit 10 (0x0400): Sensor de bola bloqueado continuamente
 }
 
 // 0 - Comandos do Computador
@@ -36,15 +47,15 @@ message InfoResponse {
 
 // 4 - Telemetria
 message Telemetry {
-    repeated float wheel_speeds = 1;     // Velocidade das 4 rodas (rad/s ou m/s)
-    repeated float kicker_voltages = 2;  // Tensões dos capacitores de chute
-    float battery_voltage = 3;           // Tensão da bateria (V)
-    bool ball_sensor = 4;                // Sensor infravermelho de posse de bola
-
+    repeated float wheel_speeds = 1;
+    repeated float kicker_voltages = 2;
+    float battery_voltage = 3;
+    bool ball_sensor = 4;
     float roll = 5;       // Inclinação lateral em radianos [-pi, +pi]
     float pitch = 6;      // Inclinação frontal em radianos [-pi/2, +pi/2]
-    float yaw = 7;        // Orientação no plano do campo em radianos [-pi, +pi]
+    float yaw = 7;        // Giro no plano do campo em radianos [-pi, +pi]
     float gyro_z = 8;     // Velocidade angular de rotação em rad/s
+    uint32 error_flags = 9; // Máscara de bits (OR dos erros ativos)
 }
 
 // MENSAGEM PRINCIPAL (Wrapper)
@@ -56,6 +67,6 @@ message RobotPacket {
         InfoRequest request = 4;
         InfoResponse response = 5;
         Telemetry telemetry = 6;
-        AlertType alert = 7;
+        uint32 alert = 7;     // Alerta assíncrono imediato contendo error_flags
     }
 }
