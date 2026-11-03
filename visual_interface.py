@@ -1,3 +1,5 @@
+import subprocess
+import atexit
 import customtkinter as ctk
 import tkinter as tk
 import socket
@@ -12,6 +14,23 @@ matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import proto.robot_comm_pb2 as proto
+
+def set_x11_keys_autorepeat(enable: bool):
+    """Ativa ou desativa o autorepeat das teclas WASDQE no Linux/X11 para evitar lag de buffer."""
+    try:
+        if enable:
+            subprocess.run(["xset", "r", "24", "r", "25", "r", "26", "r", "38", "r", "39", "r", "40"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(["xset", "r", "on"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        else:
+            subprocess.run(["xset", "-r", "24", "-r", "25", "-r", "26", "-r", "38", "-r", "39", "-r", "40"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except Exception:
+        pass
+
+atexit.register(lambda: set_x11_keys_autorepeat(True))
+
 
 # Mapeamento de erros (máscaras de bits) para metadados visuais e severidade
 ROBOT_ERRORS_CONFIG = {
@@ -517,11 +536,18 @@ class RobotDashboard(ctk.CTk):
 
         self.keys_pressed = {"w": False, "a": False, "s": False, "d": False, "q": False, "e": False}
         self._key_release_timers = {}
+        self._last_entry_focus_time = 0.0
+
+        # Desativa auto-repeat das teclas de condução no nível do SO/X11
+        set_x11_keys_autorepeat(False)
+
         self.bind("<KeyPress>", self._on_key_press)
         self.bind("<KeyRelease>", self._on_key_release)
         self.bind("<FocusOut>", self._on_focus_out)
         self.bind_all("<Button-1>", self._on_any_click, add="+")
         self.bind_all("<Escape>", lambda e: self.focus_set())
+        self.bind_class("EntryFilter", "<KeyPress>", self._on_entry_key_press)
+        self.bind_class("Entry", "<FocusIn>", self._on_entry_focus_in, add="+")
 
         self.msg_queue = queue.Queue()
         self.network = RobotInterface(msg_queue=self.msg_queue)
@@ -551,13 +577,35 @@ class RobotDashboard(ctk.CTk):
         win = RobotPlotWindow(self, robot_id, history)
         self.plot_windows[robot_id] = win
 
+    def _on_entry_focus_in(self, event):
+        self._last_entry_focus_time = time.time()
+        self._on_focus_out()
+        w = event.widget
+        tags = w.bindtags()
+        if "EntryFilter" not in tags:
+            w.bindtags(("EntryFilter",) + tags)
+
+    def _on_entry_key_press(self, event):
+        # Bloqueia qualquer caractere WASDQE residual que chegue logo após focar no campo
+        if time.time() - self._last_entry_focus_time < 0.35:
+            if event.keysym.lower() in ("w", "a", "s", "d", "q", "e"):
+                return "break"
+
     def _on_any_click(self, event):
-        if not isinstance(event.widget, (tk.Entry, tk.Text)):
+        w = event.widget
+        is_entry = False
+        while w is not None:
+            if isinstance(w, (tk.Entry, tk.Text, ctk.CTkEntry)):
+                is_entry = True
+                break
+            w = getattr(w, "master", None)
+
+        if not is_entry:
             self.focus_set()
 
     def _on_key_press(self, event):
         focused = self.focus_get()
-        if isinstance(focused, tk.Entry):
+        if isinstance(focused, (tk.Entry, tk.Text)):
             return
 
         key = event.keysym.lower()
@@ -566,23 +614,28 @@ class RobotDashboard(ctk.CTk):
             if timer is not None:
                 self.after_cancel(timer)
             self.keys_pressed[key] = True
+            return "break"
 
     def _on_key_release(self, event):
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, tk.Text)):
+            return
+
         key = event.keysym.lower()
         if key in self.keys_pressed:
             timer = self._key_release_timers.pop(key, None)
             if timer is not None:
                 self.after_cancel(timer)
-            # Debounce para filtrar o autorepeat do teclado no Linux/X11
-            self._key_release_timers[key] = self.after(35, lambda k=key: self._apply_key_release(k))
-
-    def _apply_key_release(self, key):
-        self._key_release_timers.pop(key, None)
-        self.keys_pressed[key] = False
+            # Como o autorepeat do X11 para essas teclas está desativado, o release é imediato
+            self.keys_pressed[key] = False
+            return "break"
 
     def _on_focus_out(self, event=None):
-        for timer in self._key_release_timers.values():
-            self.after_cancel(timer)
+        for timer in list(self._key_release_timers.values()):
+            try:
+                self.after_cancel(timer)
+            except Exception:
+                pass
         self._key_release_timers.clear()
         for k in self.keys_pressed:
             self.keys_pressed[k] = False
@@ -591,8 +644,12 @@ class RobotDashboard(ctk.CTk):
         header_frame = ctk.CTkFrame(self, corner_radius=10)
         header_frame.pack(fill="x", padx=20, pady=(20, 10))
 
+        vcmd_int = (self.register(lambda P: P.isdigit() or P == ""), "%P")
+        vcmd_ip = (self.register(lambda P: all(c in "0123456789." for c in P) and P.count(".") <= 3), "%P")
+
         ctk.CTkLabel(header_frame, text="Adicionar Robô (ID):").pack(side="left", padx=15, pady=15)
         self.entry_new_robot = ctk.CTkEntry(header_frame, width=80)
+        self.entry_new_robot._entry.configure(validate="key", validatecommand=vcmd_int)
         self.entry_new_robot.pack(side="left", padx=10)
         self.entry_new_robot.bind("<Return>", lambda e: self._add_robot_manual())
         ctk.CTkButton(header_frame, text="Adicionar Painel", command=self._add_robot_manual).pack(side="left", padx=10)
@@ -603,6 +660,7 @@ class RobotDashboard(ctk.CTk):
         # Campo de IP e botão de broadcast
         ctk.CTkLabel(header_frame, text="IP TCP:").pack(side="left", padx=(5, 5), pady=15)
         self.entry_tcp_ip = ctk.CTkEntry(header_frame, width=130, placeholder_text="192.168.0.100")
+        self.entry_tcp_ip._entry.configure(validate="key", validatecommand=vcmd_ip)
         self.entry_tcp_ip.pack(side="left", padx=5)
         self.entry_tcp_ip.bind("<Return>", lambda e: (self._broadcast_tcp_ip(), self.focus_set()))
         ctk.CTkButton(header_frame, text="Broadcast IP", command=self._broadcast_tcp_ip).pack(side="left", padx=10)
@@ -685,6 +743,8 @@ class RobotDashboard(ctk.CTk):
         ctk.CTkLabel(drive_f, text="🎮 CONDUÇÃO WASD", font=("Roboto", 11, "bold")).grid(row=0, column=0, padx=10)
         ctk.CTkLabel(drive_f, text="Vel Max:").grid(row=0, column=1, padx=5)
         ent_speed = ctk.CTkEntry(drive_f, width=50)
+        vcmd_speed = (self.register(lambda P: all(c in "0123456789." for c in P) and P.count(".") <= 1), "%P")
+        ent_speed._entry.configure(validate="key", validatecommand=vcmd_speed)
         ent_speed.insert(0, "1.5")
         ent_speed.grid(row=0, column=2, padx=5)
         ent_speed.bind("<Return>", lambda e: self.focus_set())
@@ -867,6 +927,7 @@ class RobotDashboard(ctk.CTk):
             ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
             ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
+            ui["last_v_tuple"] = (0.0, 0.0, 0.0)
 
     def _drive_loop(self, robot_id):
         ui = self.robots_ui.get(robot_id)
@@ -877,6 +938,7 @@ class RobotDashboard(ctk.CTk):
                 ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
                 ui["latest_motion"] = (0.0, 0.0, 0.0)
                 ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
+                ui["last_v_tuple"] = (0.0, 0.0, 0.0)
                 ui["drive_timer_id"] = None
             return
 
@@ -900,12 +962,15 @@ class RobotDashboard(ctk.CTk):
                 vw = -max_s
 
             self.network.send_motion_command(robot_id, vx, vy, vw)
-            ui["lbl_current_v"].configure(text=f"Vx: {vx:.1f} | Vy: {vy:.1f} | Vw: {vw:.1f}")
-
-            # Cinemática inversa de 4 rodas SSL em rad/s
             w_exp = calculate_omni4_inverse_kinematics(vx, vy, vw)
-            w_str = f"M1: {w_exp[0]:+.1f}, M2: {w_exp[1]:+.1f}, M3: {w_exp[2]:+.1f}, M4: {w_exp[3]:+.1f}"
-            ui["lbl_expected_wheels"].configure(text=f"🎯 Rodas Exp: [{w_str}] rad/s")
+
+            # Evita reconfigurar os widgets CustomTkinter se a velocidade não se alterou
+            current_v_tuple = (vx, vy, vw)
+            if ui.get("last_v_tuple") != current_v_tuple:
+                ui["last_v_tuple"] = current_v_tuple
+                ui["lbl_current_v"].configure(text=f"Vx: {vx:.1f} | Vy: {vy:.1f} | Vw: {vw:.1f}")
+                w_str = f"M1: {w_exp[0]:+.1f}, M2: {w_exp[1]:+.1f}, M3: {w_exp[2]:+.1f}, M4: {w_exp[3]:+.1f}"
+                ui["lbl_expected_wheels"].configure(text=f"🎯 Rodas Exp: [{w_str}] rad/s")
 
             ui["latest_motion"] = (vx, vy, vw)
             ui["latest_exp"] = w_exp
@@ -917,17 +982,34 @@ class RobotDashboard(ctk.CTk):
         ui["drive_timer_id"] = self.after(20, lambda: self._drive_loop(robot_id))
 
     def process_queue(self):
+        robots_with_telemetry = set()
         while not self.msg_queue.empty():
             try:
                 item = self.msg_queue.get_nowait()
                 if isinstance(item, tuple) and item[0] == "ROBOT_DISCONNECTED":
                     self._handle_robot_disconnect(item[1])
                 else:
-                    self._update_ui_from_packet(item)
-            except:
+                    ptype = item.WhichOneof("payload")
+                    if ptype == 'telemetry':
+                        self._process_telemetry_packet(item)
+                        robots_with_telemetry.add(item.robot_id)
+                    elif ptype == 'alert':
+                        err_flags = int(item.alert)
+                        self._update_robot_status_badge(item.robot_id, err_flags, is_alert=True)
+                    elif ptype == 'response':
+                        ui = self._get_or_create_robot_panel(item.robot_id)
+                        r = item.response
+                        v = r.text_value if r.text_value else str(getattr(r, 'value', ''))
+                        ui["lbl_resp"].configure(text=f"Resp: {v}", text_color="green")
+            except Exception:
                 break
+
+        # Renderiza os labels de texto da interface apenas UMA VEZ por ciclo por robô com o dado mais recente
+        for robot_id in robots_with_telemetry:
+            self._render_robot_telemetry_labels(robot_id)
+
         self._check_timeouts()
-        self.after(100, self.process_queue)
+        self.after(50, self.process_queue)
 
     def _check_timeouts(self):
         """Verifica se algum robô previamente conectado excedeu o timeout de heartbeat."""
@@ -938,58 +1020,58 @@ class RobotDashboard(ctk.CTk):
                 if now - last_t > ROBOT_TIMEOUT_SECONDS:
                     self._handle_robot_disconnect(robot_id)
 
-    def _update_ui_from_packet(self, packet):
+    def _process_telemetry_packet(self, packet):
         ui = self._get_or_create_robot_panel(packet.robot_id)
         ui["last_packet_time"] = time.time()
         ui["is_connected"] = True
-        ptype = packet.WhichOneof("payload")
 
-        if ptype == 'telemetry':
-            t = packet.telemetry
-            bat = float(getattr(t, 'battery_voltage', 0.0))
-            ui["latest_bat"] = bat
-            ui["lbl_bat"].configure(text=f"🔋 Bateria: {bat:.2f} V")
-            ui["lbl_ball"].configure(text=f"⚽ Sensor: {'🟢 Sim' if getattr(t, 'ball_sensor', False) else '🔴 Não'}")
+        t = packet.telemetry
+        bat = float(getattr(t, 'battery_voltage', 0.0))
+        ui["latest_bat"] = bat
+        wheels = list(t.wheel_speeds)
+        ui["latest_real"] = wheels if wheels else [0.0, 0.0, 0.0, 0.0]
+        kicker_volts = list(t.kicker_voltages)
+        ui["latest_kicker"] = float(kicker_volts[0]) if kicker_volts else 0.0
 
-            wheels = list(t.wheel_speeds)
-            ui["latest_real"] = wheels if wheels else [0.0, 0.0, 0.0, 0.0]
-            if wheels:
-                wheels_str = ", ".join([f"{w:.2f}" for w in wheels])
-                ui["lbl_wheels"].configure(text=f"⚙️ Rodas Real: [{wheels_str}]")
-            else:
-                ui["lbl_wheels"].configure(text="⚙️ Rodas Real: [--]")
+        # Grava todos os pontos no histórico para o gráfico sem perdas
+        history = self.robots_history.setdefault(packet.robot_id, RobotDataHistory())
+        history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"])
 
-            kicker_volts = list(t.kicker_voltages)
-            ui["latest_kicker"] = float(kicker_volts[0]) if kicker_volts else 0.0
+        # Guarda a telemetria mais recente para renderização agregada
+        ui["pending_telemetry_render"] = t
 
-            history = self.robots_history.setdefault(packet.robot_id, RobotDataHistory())
-            history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"])
+    def _render_robot_telemetry_labels(self, robot_id):
+        ui = self.robots_ui.get(robot_id)
+        if not ui or "pending_telemetry_render" not in ui:
+            return
+        t = ui.pop("pending_telemetry_render")
 
-            r = getattr(t, 'roll', 0.0)
-            p = getattr(t, 'pitch', 0.0)
-            y = getattr(t, 'yaw', 0.0)
-            gz = getattr(t, 'gyro_z', 0.0)
-            ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
+        bat = ui["latest_bat"]
+        ui["lbl_bat"].configure(text=f"🔋 Bateria: {bat:.2f} V")
+        ui["lbl_ball"].configure(text=f"⚽ Sensor: {'🟢 Sim' if getattr(t, 'ball_sensor', False) else '🔴 Não'}")
 
-            # Atualiza badges de erro via telemetria periódica
-            err_flags = int(getattr(t, 'error_flags', 0))
-            self._update_robot_status_badge(packet.robot_id, err_flags)
+        wheels = ui["latest_real"]
+        if wheels and any(w != 0.0 for w in wheels):
+            wheels_str = ", ".join([f"{w:.2f}" for w in wheels])
+            ui["lbl_wheels"].configure(text=f"⚙️ Rodas Real: [{wheels_str}]")
+        else:
+            ui["lbl_wheels"].configure(text="⚙️ Rodas Real: [--]")
 
-        elif ptype == 'alert':
-            # Pacote assíncrono de alerta imediato contendo error_flags
-            err_flags = int(packet.alert)
-            self._update_robot_status_badge(packet.robot_id, err_flags, is_alert=True)
+        r = getattr(t, 'roll', 0.0)
+        p = getattr(t, 'pitch', 0.0)
+        y = getattr(t, 'yaw', 0.0)
+        gz = getattr(t, 'gyro_z', 0.0)
+        ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
 
-        elif ptype == 'response':
-            r = packet.response
-            v = r.text_value if r.text_value else str(getattr(r, 'value', ''))
-            ui["lbl_resp"].configure(text=f"Resp: {v}", text_color="green")
+        err_flags = int(getattr(t, 'error_flags', 0))
+        self._update_robot_status_badge(robot_id, err_flags)
 
 
 if __name__ == "__main__":
     app = RobotDashboard()
 
     def on_close():
+        set_x11_keys_autorepeat(True)
         app.network.running = False
         for win in list(app.plot_windows.values()):
             try:
