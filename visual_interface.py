@@ -755,12 +755,25 @@ class RobotDashboard(ctk.CTk):
         switch_drive = ctk.CTkSwitch(drive_f, text="Ativar Teclado", command=lambda: self._toggle_drive(robot_id))
         switch_drive.grid(row=0, column=4, padx=10)
 
+        btn_kicker = ctk.CTkButton(
+            drive_f,
+            text="⚡ Kicker: OFF",
+            font=("Roboto", 11, "bold"),
+            width=120,
+            height=28,
+            corner_radius=8,
+            fg_color="#3a3a3a",
+            hover_color="#4a4a4a",
+            command=lambda: self._toggle_kicker(robot_id)
+        )
+        btn_kicker.grid(row=0, column=5, padx=10)
+
         self.robots_ui[robot_id] = {
             "panel": panel, "badge_container": badge_container, "current_error_flags": None,
             "last_packet_time": None, "is_connected": False,
             "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu, "lbl_resp": lbl_resp,
             "ent_speed": ent_speed, "lbl_current_v": lbl_curr, "lbl_expected_wheels": lbl_exp,
-            "switch_drive": switch_drive, "is_driving": False, "drive_timer_id": None,
+            "switch_drive": switch_drive, "btn_kicker": btn_kicker, "is_driving": False, "is_kicking": False, "drive_timer_id": None,
             "latest_motion": (0.0, 0.0, 0.0), "latest_exp": [0.0, 0.0, 0.0, 0.0],
             "latest_real": [0.0, 0.0, 0.0, 0.0], "latest_bat": 0.0, "latest_kicker": 0.0
         }
@@ -790,6 +803,11 @@ class RobotDashboard(ctk.CTk):
 
         ui["is_connected"] = False
         ui["current_error_flags"] = None
+        if ui.get("is_kicking", False):
+            ui["is_kicking"] = False
+            btn = ui.get("btn_kicker")
+            if btn:
+                btn.configure(text="⚡ Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
         panel = ui["panel"]
         badge_container = ui["badge_container"]
 
@@ -909,6 +927,41 @@ class RobotDashboard(ctk.CTk):
             val = val_str
         self.network.send_config_command(robot_id, p_id, val)
 
+    def _toggle_kicker(self, robot_id):
+        ui = self.robots_ui.get(robot_id)
+        if not ui:
+            return
+
+        is_kicking = not ui.get("is_kicking", False)
+        ui["is_kicking"] = is_kicking
+
+        btn = ui.get("btn_kicker")
+        if btn:
+            if is_kicking:
+                btn.configure(text="⚡ Kicker: ATIVO", fg_color="#c0392b", hover_color="#e74c3c")
+            else:
+                btn.configure(text="⚡ Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
+
+        self.focus_set()
+
+        if is_kicking:
+            if ui.get("is_driving", False):
+                vx, vy, vw = ui.get("latest_motion", (0.0, 0.0, 0.0))
+                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=1)
+            else:
+                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=1)
+                if ui.get("drive_timer_id") is None:
+                    self._drive_loop(robot_id)
+        else:
+            if ui.get("is_driving", False):
+                vx, vy, vw = ui.get("latest_motion", (0.0, 0.0, 0.0))
+                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=0)
+            else:
+                if ui.get("drive_timer_id") is not None:
+                    self.after_cancel(ui["drive_timer_id"])
+                    ui["drive_timer_id"] = None
+                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0)
+
     def _toggle_drive(self, robot_id):
         ui = self.robots_ui[robot_id]
         is_driving = ui["switch_drive"].get() == 1
@@ -922,46 +975,59 @@ class RobotDashboard(ctk.CTk):
             self.focus_set()
             self._drive_loop(robot_id)
         else:
-            self.network.send_motion_command(robot_id, 0, 0, 0)
+            is_kicking = ui.get("is_kicking", False)
+            kick_val = 1 if is_kicking else 0
+            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=kick_val)
             ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
             ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
             ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
             ui["last_v_tuple"] = (0.0, 0.0, 0.0)
+            if is_kicking:
+                self._drive_loop(robot_id)
 
     def _drive_loop(self, robot_id):
         ui = self.robots_ui.get(robot_id)
-        if not ui or not ui["is_driving"]:
-            self.network.send_motion_command(robot_id, 0, 0, 0)
-            if ui:
-                ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
-                ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
-                ui["latest_motion"] = (0.0, 0.0, 0.0)
-                ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
-                ui["last_v_tuple"] = (0.0, 0.0, 0.0)
-                ui["drive_timer_id"] = None
+        if not ui:
+            return
+
+        is_driving = ui.get("is_driving", False)
+        is_kicking = ui.get("is_kicking", False)
+
+        if not is_driving and not is_kicking:
+            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0)
+            ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
+            ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
+            ui["latest_motion"] = (0.0, 0.0, 0.0)
+            ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
+            ui["last_v_tuple"] = (0.0, 0.0, 0.0)
+            ui["drive_timer_id"] = None
             return
 
         try:
-            max_s = float(ui["ent_speed"].get())
-            vx, vy, vw = 0.0, 0.0, 0.0
+            kick_val = 1 if is_kicking else 0
+            if is_driving:
+                max_s = float(ui["ent_speed"].get())
+                vx, vy, vw = 0.0, 0.0, 0.0
 
-            if self.keys_pressed["w"]:
-                vy = max_s
-            elif self.keys_pressed["s"]:
-                vy = -max_s
+                if self.keys_pressed["w"]:
+                    vy = max_s
+                elif self.keys_pressed["s"]:
+                    vy = -max_s
 
-            if self.keys_pressed["d"]:
-                vx = max_s
-            elif self.keys_pressed["a"]:
-                vx = -max_s
+                if self.keys_pressed["d"]:
+                    vx = max_s
+                elif self.keys_pressed["a"]:
+                    vx = -max_s
 
-            if self.keys_pressed["q"]:
-                vw = max_s
-            elif self.keys_pressed["e"]:
-                vw = -max_s
+                if self.keys_pressed["q"]:
+                    vw = max_s
+                elif self.keys_pressed["e"]:
+                    vw = -max_s
+            else:
+                vx, vy, vw = 0.0, 0.0, 0.0
 
-            self.network.send_motion_command(robot_id, vx, vy, vw)
+            self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=kick_val)
             w_exp = calculate_omni4_inverse_kinematics(vx, vy, vw)
 
             # Evita reconfigurar os widgets CustomTkinter se a velocidade não se alterou
