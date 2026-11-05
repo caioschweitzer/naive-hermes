@@ -69,4 +69,5 @@ message RobotPacket {
         Telemetry telemetry = 6;
         uint32 alert = 7;     // Alerta assíncrono imediato contendo error_flags
     }
+    uint32 sequence_id = 8;   // Contador sequencial de pacotes para detecção de perda
 }

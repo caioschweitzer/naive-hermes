@@ -218,8 +218,9 @@ class RobotDataHistory:
         self.vw = deque(maxlen=maxlen)
         self.battery = deque(maxlen=maxlen)
         self.kicker = deque(maxlen=maxlen)
+        self.packet_loss_pct = deque(maxlen=maxlen)
 
-    def add_point(self, t, battery, kicker, wheels_real, wheels_exp, motion):
+    def add_point(self, t, battery, kicker, wheels_real, wheels_exp, motion, loss_pct=0.0):
         self.timestamps.append(t)
         self.battery.append(battery)
         self.kicker.append(kicker)
@@ -231,6 +232,7 @@ class RobotDataHistory:
         self.vx.append(motion[0] if motion else 0.0)
         self.vy.append(motion[1] if motion else 0.0)
         self.vw.append(motion[2] if motion else 0.0)
+        self.packet_loss_pct.append(loss_pct)
 
     def clear(self):
         self.timestamps.clear()
@@ -242,6 +244,7 @@ class RobotDataHistory:
         self.vw.clear()
         self.battery.clear()
         self.kicker.clear()
+        self.packet_loss_pct.clear()
 
 
 class RobotPlotWindow(ctk.CTkToplevel):
@@ -255,7 +258,8 @@ class RobotPlotWindow(ctk.CTkToplevel):
         "Todas as Rodas (Esperada)",
         "Velocidades Robô (Vx, Vy, Vw)",
         "Bateria (V)",
-        "Chute (V)"
+        "Chute (V)",
+        "Perda de Pacotes (%)"
     ]
 
     WINDOW_OPTIONS = {
@@ -265,13 +269,15 @@ class RobotPlotWindow(ctk.CTkToplevel):
         "30s": 30.0
     }
 
-    def __init__(self, master, robot_id, history):
+    def __init__(self, master, robot_key, history):
         super().__init__(master)
-        self.robot_id = robot_id
+        self.robot_key = robot_key
+        self.robot_id, self.robot_ip = robot_key
         self.history = history
         self.master = master
 
-        self.title(f"📈 Telemetria em Tempo Real - Robô ID {robot_id}")
+        ip_label = self.robot_ip if self.robot_ip else "Sem IP"
+        self.title(f"📈 Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
         self.geometry("800x520")
         self.minsize(550, 380)
 
@@ -283,6 +289,12 @@ class RobotPlotWindow(ctk.CTkToplevel):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._update_plot()
+
+    def update_robot_key(self, new_key):
+        self.robot_key = new_key
+        self.robot_id, self.robot_ip = new_key
+        ip_label = self.robot_ip if self.robot_ip else "Sem IP"
+        self.title(f"📈 Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
 
     def _build_ui(self):
         # Barra superior com controles
@@ -369,6 +381,8 @@ class RobotPlotWindow(ctk.CTkToplevel):
             return
 
         signal = self.cb_signal.get()
+        ip_label = self.robot_ip if self.robot_ip else "Sem IP"
+        robot_desc = f"Robô ID {self.robot_id} [{ip_label}]"
 
         if signal.startswith("M") and "Real vs Esperada" in signal:
             wheel_idx = int(signal[1]) - 1
@@ -377,7 +391,7 @@ class RobotPlotWindow(ctk.CTkToplevel):
             self.ax.plot(rel_t, y_real, label=f"M{wheel_idx+1} Real (rad/s)", color="#00e5ff", linewidth=1.8)
             self.ax.plot(rel_t, y_exp, label=f"M{wheel_idx+1} Esperada (rad/s)", color="#ff9100", linestyle="--", linewidth=1.8)
             self.ax.set_ylabel("rad/s", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Roda {wheel_idx+1} (Real vs Esperada)", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Roda {wheel_idx+1} (Real vs Esperada)", color="#ffffff", fontsize=11)
 
         elif signal == "Todas as Rodas (Real)":
             colors = ["#ffd600", "#00e5ff", "#00e676", "#e040fb"]
@@ -385,7 +399,7 @@ class RobotPlotWindow(ctk.CTkToplevel):
                 y = list(self.history.wheels_real[i])[idx_start:]
                 self.ax.plot(rel_t, y, label=f"M{i+1} Real", color=colors[i], linewidth=1.6)
             self.ax.set_ylabel("rad/s", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Telemetria Real das 4 Rodas", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Telemetria Real das 4 Rodas", color="#ffffff", fontsize=11)
 
         elif signal == "Todas as Rodas (Esperada)":
             colors = ["#ffd600", "#00e5ff", "#00e676", "#e040fb"]
@@ -393,24 +407,29 @@ class RobotPlotWindow(ctk.CTkToplevel):
                 y = list(self.history.wheels_exp[i])[idx_start:]
                 self.ax.plot(rel_t, y, label=f"M{i+1} Exp", color=colors[i], linewidth=1.6)
             self.ax.set_ylabel("rad/s", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Velocidades Esperadas das 4 Rodas", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Velocidades Esperadas das 4 Rodas", color="#ffffff", fontsize=11)
 
         elif signal == "Velocidades Robô (Vx, Vy, Vw)":
             self.ax.plot(rel_t, list(self.history.vx)[idx_start:], label="Vx (m/s)", color="#ff5252", linewidth=1.6)
             self.ax.plot(rel_t, list(self.history.vy)[idx_start:], label="Vy (m/s)", color="#69f0ae", linewidth=1.6)
             self.ax.plot(rel_t, list(self.history.vw)[idx_start:], label="Vw (rad/s)", color="#448aff", linewidth=1.6)
             self.ax.set_ylabel("Velocidade", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Comandos de Velocidade", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Comandos de Velocidade", color="#ffffff", fontsize=11)
 
         elif signal == "Bateria (V)":
             self.ax.plot(rel_t, list(self.history.battery)[idx_start:], label="Bateria (V)", color="#ffd740", linewidth=2.0)
             self.ax.set_ylabel("Volts (V)", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Tensão da Bateria", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Tensão da Bateria", color="#ffffff", fontsize=11)
 
         elif signal == "Chute (V)":
             self.ax.plot(rel_t, list(self.history.kicker)[idx_start:], label="Chute (V)", color="#ff5252", linewidth=2.0)
             self.ax.set_ylabel("Volts (V)", color="#bbbbbb")
-            self.ax.set_title(f"Robô ID {self.robot_id} - Tensão do Chute", color="#ffffff", fontsize=11)
+            self.ax.set_title(f"{robot_desc} - Tensão do Chute", color="#ffffff", fontsize=11)
+
+        elif signal == "Perda de Pacotes (%)":
+            self.ax.plot(rel_t, list(self.history.packet_loss_pct)[idx_start:], label="Perda de Pacotes (%)", color="#ff9100", linewidth=2.0)
+            self.ax.set_ylabel("Perda (%)", color="#bbbbbb")
+            self.ax.set_title(f"{robot_desc} - Taxa de Perda de Pacotes", color="#ffffff", fontsize=11)
 
         # Garante que o zero (0.0) sempre permaneça visível no eixo Y
         y_min, y_max = self.ax.get_ylim()
@@ -435,31 +454,37 @@ class RobotPlotWindow(ctk.CTkToplevel):
         if self.update_timer_id is not None:
             self.after_cancel(self.update_timer_id)
             self.update_timer_id = None
-        self.master.plot_windows.pop(self.robot_id, None)
+        self.master.plot_windows.pop(self.robot_key, None)
         self.destroy()
 
 
 class RobotInterface:
-    def __init__(self, msg_queue, UDP_IP="192.168.142.255", UDP_PORT=5000, TCP_IP="0.0.0.0", TCP_PORT=5001):
+    def __init__(self, msg_queue, UDP_IP="192.168.142.255", UDP_PORT=5000, RX_UDP_IP="0.0.0.0", RX_UDP_PORT=5001):
         self.running = True
         self.msg_queue = msg_queue
         self.UDP_IP = UDP_IP
         self.UDP_PORT = UDP_PORT
-        self.TCP_IP = TCP_IP
-        self.TCP_PORT = TCP_PORT
+        self.RX_UDP_IP = RX_UDP_IP
+        self.RX_UDP_PORT = RX_UDP_PORT
+        self._tx_seq_counters = {}
 
         self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-        self.tcp_thread = threading.Thread(target=self._tcp_server_task)
-        self.tcp_thread.daemon = True
-        self.tcp_thread.start()
+        self.rx_thread = threading.Thread(target=self._udp_rx_server_task, daemon=True)
+        self.rx_thread.start()
 
-    def _send_udp_packet(self, packet):
+    def _send_udp_packet(self, packet, target_ip=None):
+        dest_ip = target_ip if target_ip else self.UDP_IP
+        seq_key = (int(packet.robot_id), dest_ip)
+        next_seq = (self._tx_seq_counters.get(seq_key, 0) + 1) & 0xFFFFFFFF
+        self._tx_seq_counters[seq_key] = next_seq
+        packet.sequence_id = next_seq
+
         msg = packet.SerializeToString()
-        self.udp_sock.sendto(msg, (self.UDP_IP, self.UDP_PORT))
+        self.udp_sock.sendto(msg, (dest_ip, self.UDP_PORT))
 
-    def send_motion_command(self, robot_id, vx, vy, vw, kick_h=0, kick_v=0):
+    def send_motion_command(self, robot_id, vx, vy, vw, kick_h=0, kick_v=0, target_ip=None):
         packet = proto.RobotPacket()
         packet.robot_id = int(robot_id)
         packet.motion.vel_x = float(vx)
@@ -467,15 +492,15 @@ class RobotInterface:
         packet.motion.vel_w = float(vw)
         packet.motion.kick_h = int(kick_h)
         packet.motion.kick_v = int(kick_v)
-        self._send_udp_packet(packet)
+        self._send_udp_packet(packet, target_ip=target_ip)
 
-    def send_info_request(self, robot_id, info_index):
+    def send_info_request(self, robot_id, info_index, target_ip=None):
         packet = proto.RobotPacket()
         packet.robot_id = int(robot_id)
         packet.request.info_index = int(info_index)
-        self._send_udp_packet(packet)
+        self._send_udp_packet(packet, target_ip=target_ip)
 
-    def send_config_command(self, robot_id, param_id, value):
+    def send_config_command(self, robot_id, param_id, value, target_ip=None):
         packet = proto.RobotPacket()
         packet.robot_id = int(robot_id)
         packet.config.param_id = int(param_id)
@@ -483,45 +508,35 @@ class RobotInterface:
             packet.config.text_value = value
         else:
             packet.config.value = float(value)
-        self._send_udp_packet(packet)
+        self._send_udp_packet(packet, target_ip=target_ip)
 
-    def _tcp_server_task(self):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((self.TCP_IP, self.TCP_PORT))
-        server.listen(5)
-        while self.running:
-            try:
-                server.settimeout(1.0)
-                client, addr = server.accept()
-                threading.Thread(target=self._handle_robot_client, args=(client, addr), daemon=True).start()
-            except socket.timeout:
-                continue
-            except Exception:
-                break
-
-    def _handle_robot_client(self, client_socket, addr):
-        associated_robots = set()
-        with client_socket:
+    def _udp_rx_server_task(self):
+        rx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        rx_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        rx_sock.bind((self.RX_UDP_IP, self.RX_UDP_PORT))
+        rx_sock.settimeout(1.0)
+        with rx_sock:
             while self.running:
                 try:
-                    raw_msg_len = client_socket.recv(4)
-                    if not raw_msg_len: break
-                    msg_len = struct.unpack('<I', raw_msg_len)[0]
-                    data = b''
-                    while len(data) < msg_len:
-                        chunk = client_socket.recv(msg_len - len(data))
-                        if not chunk: break
-                        data += chunk
+                    data, addr = rx_sock.recvfrom(4096)
+                    if not data:
+                        continue
+                    client_ip = addr[0]
                     packet = proto.RobotPacket()
-                    packet.ParseFromString(data)
-                    associated_robots.add(packet.robot_id)
-                    self.msg_queue.put(packet)
-                except:
-                    break
-        # Notifica a interface imediatamente sobre a desconexão do socket dos robôs associados
-        for rid in associated_robots:
-            self.msg_queue.put(("ROBOT_DISCONNECTED", rid))
+                    if len(data) > 4 and struct.unpack('<I', data[:4])[0] == len(data) - 4:
+                        try:
+                            packet.ParseFromString(data[4:])
+                            if packet.WhichOneof("payload") is None:
+                                packet.ParseFromString(data)
+                        except Exception:
+                            packet.ParseFromString(data)
+                    else:
+                        packet.ParseFromString(data)
+                    self.msg_queue.put(("PACKET", client_ip, packet))
+                except socket.timeout:
+                    continue
+                except Exception:
+                    continue
 
     def broadcast_TCP_IP(self, ip: str):
         self.send_config_command(0xFF, 1, ip)
@@ -555,7 +570,12 @@ class RobotDashboard(ctk.CTk):
         self.plot_windows = {}
         self.robots_history = {}
 
-        self.info_options = {"0 - IP da ESP32": 0, "1 - MAC da ESP32": 1, "2 - Solicitar Telemetria": 2}
+        self.info_options = {
+            "0 - IP da ESP32": 0,
+            "1 - MAC da ESP32": 1,
+            "2 - Solicitar Telemetria": 2,
+            "3 - Perda de Pacotes": 3
+        }
         self.config_options = {"0 - Novo ID": 0, "1 - IP TCP": 1, "2 - Porta TCP": 2, "3 - Porta UDP": 3}
 
         self._build_header()
@@ -563,19 +583,49 @@ class RobotDashboard(ctk.CTk):
         self.scrollable_frame.pack(fill="both", expand=True, padx=20, pady=10)
         self.process_queue()
 
-    def _open_robot_plot(self, robot_id):
-        if robot_id in self.plot_windows:
-            win = self.plot_windows[robot_id]
+    def _open_robot_plot(self, robot_key):
+        if robot_key in self.plot_windows:
+            win = self.plot_windows[robot_key]
             try:
                 win.lift()
                 win.focus_force()
                 return
             except:
-                self.plot_windows.pop(robot_id, None)
+                self.plot_windows.pop(robot_key, None)
 
-        history = self.robots_history.setdefault(robot_id, RobotDataHistory())
-        win = RobotPlotWindow(self, robot_id, history)
-        self.plot_windows[robot_id] = win
+        history = self.robots_history.setdefault(robot_key, RobotDataHistory())
+        win = RobotPlotWindow(self, robot_key, history)
+        self.plot_windows[robot_key] = win
+
+    def _resolve_robot_key(self, robot_id, robot_ip=None):
+        """
+        Retorna a chave única (robot_id, ip) do robô.
+        Se existir um painel manual aguardando conexão ((robot_id, None)) e chegar um pacote
+        com IP definido que ainda não possui painel próprio, vincula esse IP ao painel manual.
+        """
+        rid = int(robot_id)
+        key = (rid, robot_ip)
+        if key in self.robots_ui:
+            return key
+
+        waiting_key = (rid, None)
+        if robot_ip is not None and waiting_key in self.robots_ui:
+            ui = self.robots_ui.pop(waiting_key)
+            ui["robot_key"] = key
+            ui["ip"] = robot_ip
+            if "lbl_ip" in ui and ui["lbl_ip"]:
+                ui["lbl_ip"].configure(text=f"🌐 {robot_ip}", text_color="#85C1E9")
+            self.robots_ui[key] = ui
+
+            if waiting_key in self.robots_history:
+                self.robots_history[key] = self.robots_history.pop(waiting_key)
+
+            if waiting_key in self.plot_windows:
+                win = self.plot_windows.pop(waiting_key)
+                win.update_robot_key(key)
+                self.plot_windows[key] = win
+
+        return key
 
     def _on_entry_focus_in(self, event):
         self._last_entry_focus_time = time.time()
@@ -674,28 +724,54 @@ class RobotDashboard(ctk.CTk):
     def _add_robot_manual(self):
         robot_id = self.entry_new_robot.get().strip()
         if robot_id.isdigit():
-            self._get_or_create_robot_panel(int(robot_id))
+            self._get_or_create_robot_panel(int(robot_id), None)
             self.entry_new_robot.delete(0, 'end')
         self.focus_set()
 
-    def _get_or_create_robot_panel(self, robot_id):
-        if robot_id in self.robots_ui:
-            return self.robots_ui[robot_id]
+    def _get_or_create_robot_panel(self, robot_id, robot_ip=None):
+        robot_key = self._resolve_robot_key(robot_id, robot_ip)
+        if robot_key in self.robots_ui:
+            return self.robots_ui[robot_key]
+
+        rid, rip = robot_key
 
         panel = ctk.CTkFrame(self.scrollable_frame, corner_radius=15)
         panel.pack(fill="x", pady=10)
 
-        # Cabeçalho do robô com ID, badges de status e botão do gráfico
+        # Cabeçalho do robô com ID, IP, badges de status e botão do gráfico
         title_f = ctk.CTkFrame(panel, fg_color="transparent")
         title_f.pack(fill="x", padx=20, pady=(15, 5))
-        ctk.CTkLabel(title_f, text=f"🤖 Robô ID: {robot_id}", font=("Roboto", 18, "bold"), text_color="#1f6aa5").pack(side="left")
+        ctk.CTkLabel(title_f, text=f"🤖 Robô ID: {rid}", font=("Roboto", 18, "bold"), text_color="#1f6aa5").pack(side="left")
+
+        ip_text = f"🌐 {rip}" if rip else "🌐 IP: Aguardando..."
+        lbl_ip = ctk.CTkLabel(
+            title_f,
+            text=ip_text,
+            font=("Roboto", 12, "bold"),
+            fg_color="#1B2631",
+            text_color="#85C1E9" if rip else "#7F8C8D",
+            corner_radius=6,
+            padx=8,
+            pady=2
+        )
+        lbl_ip.pack(side="left", padx=(10, 0))
 
         # Container para os badges dinâmicos de status/alerta
         badge_container = ctk.CTkFrame(title_f, fg_color="transparent")
         badge_container.pack(side="left", padx=(12, 0))
 
+        ui = {
+            "robot_key": robot_key, "robot_id": rid, "ip": rip, "lbl_ip": lbl_ip,
+            "panel": panel, "badge_container": badge_container, "current_error_flags": None,
+            "last_packet_time": None, "is_connected": False,
+            "last_seq_id": None, "rx_packets": 0, "lost_packets": 0, "latest_loss_pct": 0.0,
+            "is_driving": False, "is_kicking": False, "drive_timer_id": None,
+            "latest_motion": (0.0, 0.0, 0.0), "latest_exp": [0.0, 0.0, 0.0, 0.0],
+            "latest_real": [0.0, 0.0, 0.0, 0.0], "latest_bat": 0.0, "latest_kicker": 0.0
+        }
+
         ctk.CTkButton(title_f, text="📈 Abrir Gráfico", width=120, height=28, fg_color="#1f6aa5", hover_color="#144870",
-                      command=lambda: self._open_robot_plot(robot_id)).pack(side="right")
+                      command=lambda: self._open_robot_plot(ui["robot_key"])).pack(side="right")
 
         # --- TELEMETRIA ---
         tele_f = ctk.CTkFrame(panel, fg_color="transparent")
@@ -716,25 +792,28 @@ class RobotDashboard(ctk.CTk):
         lbl_imu = ctk.CTkLabel(tele_f, text="🧭 IMU: Roll: -- | Pitch: -- | Yaw: -- | Gyro Z: --")
         lbl_imu.grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 0))
 
+        lbl_pkt = ctk.CTkLabel(tele_f, text="📡 Seq: -- | 📉 Perda: 0 (0.0%)", text_color="#a9dfbf")
+        lbl_pkt.grid(row=1, column=3, sticky="w", pady=(2, 0))
+
         # --- CONFIGURAÇÃO E REQUESTS ---
         actions_f = ctk.CTkFrame(panel, fg_color="transparent")
         actions_f.pack(fill="x", padx=20, pady=5)
 
-        cb_req = ctk.CTkOptionMenu(actions_f, values=list(self.info_options.keys()), width=140)
+        cb_req = ctk.CTkOptionMenu(actions_f, values=list(self.info_options.keys()), width=175)
         cb_req.grid(row=0, column=0, padx=5, pady=2)
         ctk.CTkButton(actions_f, text="Request", width=70,
-                      command=lambda: self.network.send_info_request(robot_id, self.info_options[cb_req.get()])).grid(
+                      command=lambda: self.network.send_info_request(ui["robot_id"], self.info_options[cb_req.get()], target_ip=ui["ip"])).grid(
             row=0, column=1)
         lbl_resp = ctk.CTkLabel(actions_f, text="Resp: --", text_color="gray")
         lbl_resp.grid(row=0, column=2, padx=10)
 
-        cb_conf = ctk.CTkOptionMenu(actions_f, values=list(self.config_options.keys()), width=140)
+        cb_conf = ctk.CTkOptionMenu(actions_f, values=list(self.config_options.keys()), width=175)
         cb_conf.grid(row=1, column=0, padx=5, pady=2)
         ent_conf = ctk.CTkEntry(actions_f, placeholder_text="valor", width=100)
         ent_conf.grid(row=1, column=1, padx=5)
-        ent_conf.bind("<Return>", lambda e: (self._send_config(robot_id, cb_conf.get(), ent_conf.get()), self.focus_set()))
+        ent_conf.bind("<Return>", lambda e: (self._send_config(ui["robot_key"], cb_conf.get(), ent_conf.get()), self.focus_set()))
         ctk.CTkButton(actions_f, text="Set Config", width=80,
-                      command=lambda: (self._send_config(robot_id, cb_conf.get(), ent_conf.get()), self.focus_set())).grid(row=1, column=2)
+                      command=lambda: (self._send_config(ui["robot_key"], cb_conf.get(), ent_conf.get()), self.focus_set())).grid(row=1, column=2)
 
         # --- MODO CONDUÇÃO ---
         drive_f = ctk.CTkFrame(panel, fg_color="#2b2b2b", corner_radius=10)
@@ -752,7 +831,7 @@ class RobotDashboard(ctk.CTk):
         lbl_curr = ctk.CTkLabel(drive_f, text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0", text_color="#777777")
         lbl_curr.grid(row=0, column=3, padx=15)
 
-        switch_drive = ctk.CTkSwitch(drive_f, text="Ativar Teclado", command=lambda: self._toggle_drive(robot_id))
+        switch_drive = ctk.CTkSwitch(drive_f, text="Ativar Teclado", command=lambda: self._toggle_drive(ui["robot_key"]))
         switch_drive.grid(row=0, column=4, padx=10)
 
         btn_kicker = ctk.CTkButton(
@@ -764,19 +843,18 @@ class RobotDashboard(ctk.CTk):
             corner_radius=8,
             fg_color="#3a3a3a",
             hover_color="#4a4a4a",
-            command=lambda: self._toggle_kicker(robot_id)
+            command=lambda: self._toggle_kicker(ui["robot_key"])
         )
         btn_kicker.grid(row=0, column=5, padx=10)
 
-        self.robots_ui[robot_id] = {
-            "panel": panel, "badge_container": badge_container, "current_error_flags": None,
-            "last_packet_time": None, "is_connected": False,
-            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu, "lbl_resp": lbl_resp,
+        ui.update({
+            "lbl_bat": lbl_bat, "lbl_ball": lbl_ball, "lbl_wheels": lbl_wheels, "lbl_imu": lbl_imu,
+            "lbl_pkt": lbl_pkt, "lbl_resp": lbl_resp,
             "ent_speed": ent_speed, "lbl_current_v": lbl_curr, "lbl_expected_wheels": lbl_exp,
-            "switch_drive": switch_drive, "btn_kicker": btn_kicker, "is_driving": False, "is_kicking": False, "drive_timer_id": None,
-            "latest_motion": (0.0, 0.0, 0.0), "latest_exp": [0.0, 0.0, 0.0, 0.0],
-            "latest_real": [0.0, 0.0, 0.0, 0.0], "latest_bat": 0.0, "latest_kicker": 0.0
-        }
+            "switch_drive": switch_drive, "btn_kicker": btn_kicker
+        })
+        self.robots_ui[robot_key] = ui
+
         # Inicia aguardando conexão
         lbl_waiting = ctk.CTkLabel(
             badge_container,
@@ -789,13 +867,13 @@ class RobotDashboard(ctk.CTk):
             pady=2
         )
         lbl_waiting.pack(side="left", padx=2)
-        return self.robots_ui[robot_id]
+        return self.robots_ui[robot_key]
 
-    def _handle_robot_disconnect(self, robot_id):
+    def _handle_robot_disconnect(self, robot_key):
         """Dispara o alerta local de robô desconectado na interface."""
-        if robot_id not in self.robots_ui:
+        if robot_key not in self.robots_ui:
             return
-        ui = self.robots_ui[robot_id]
+        ui = self.robots_ui[robot_key]
 
         # Se já estava marcado como desconectado, não recria widgets
         if not ui.get("is_connected", False) and ui.get("last_packet_time") is not None:
@@ -827,11 +905,11 @@ class RobotDashboard(ctk.CTk):
         lbl_disc.pack(side="left", padx=2)
         panel.configure(border_width=2, border_color="#922B21")
 
-    def _update_robot_status_badge(self, robot_id, error_flags, is_alert=False):
+    def _update_robot_status_badge(self, robot_key, error_flags, is_alert=False):
         """Atualiza dinamicamente os badges de status e a borda do card do robô."""
-        if robot_id not in self.robots_ui:
+        if robot_key not in self.robots_ui:
             return
-        ui = self.robots_ui[robot_id]
+        ui = self.robots_ui[robot_key]
 
         # Evita reconstruir widgets se não houve mudança de estado (a menos que seja um alerta explícito)
         if not is_alert and ui.get("current_error_flags") == error_flags:
@@ -918,20 +996,24 @@ class RobotDashboard(ctk.CTk):
                 )
                 b_more.pack(side="left", padx=2)
 
-    def _send_config(self, robot_id, cb_text, val_str):
+    def _send_config(self, robot_key, cb_text, val_str):
         if not val_str: return
+        ui = self.robots_ui.get(robot_key)
+        if not ui: return
         p_id = self.config_options[cb_text]
         try:
             val = float(val_str) if ('.' in val_str or val_str.isdigit()) else val_str
         except:
             val = val_str
-        self.network.send_config_command(robot_id, p_id, val)
+        self.network.send_config_command(ui["robot_id"], p_id, val, target_ip=ui["ip"])
 
-    def _toggle_kicker(self, robot_id):
-        ui = self.robots_ui.get(robot_id)
+    def _toggle_kicker(self, robot_key):
+        ui = self.robots_ui.get(robot_key)
         if not ui:
             return
 
+        robot_id = ui["robot_id"]
+        target_ip = ui["ip"]
         is_kicking = not ui.get("is_kicking", False)
         ui["is_kicking"] = is_kicking
 
@@ -947,23 +1029,27 @@ class RobotDashboard(ctk.CTk):
         if is_kicking:
             if ui.get("is_driving", False):
                 vx, vy, vw = ui.get("latest_motion", (0.0, 0.0, 0.0))
-                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=1)
+                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=1, target_ip=target_ip)
             else:
-                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=1)
+                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=1, target_ip=target_ip)
                 if ui.get("drive_timer_id") is None:
-                    self._drive_loop(robot_id)
+                    self._drive_loop(ui["robot_key"])
         else:
             if ui.get("is_driving", False):
                 vx, vy, vw = ui.get("latest_motion", (0.0, 0.0, 0.0))
-                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=0)
+                self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=0, target_ip=target_ip)
             else:
                 if ui.get("drive_timer_id") is not None:
                     self.after_cancel(ui["drive_timer_id"])
                     ui["drive_timer_id"] = None
-                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0)
+                self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0, target_ip=target_ip)
 
-    def _toggle_drive(self, robot_id):
-        ui = self.robots_ui[robot_id]
+    def _toggle_drive(self, robot_key):
+        ui = self.robots_ui.get(robot_key)
+        if not ui:
+            return
+        robot_id = ui["robot_id"]
+        target_ip = ui["ip"]
         is_driving = ui["switch_drive"].get() == 1
         ui["is_driving"] = is_driving
 
@@ -973,29 +1059,31 @@ class RobotDashboard(ctk.CTk):
 
         if is_driving:
             self.focus_set()
-            self._drive_loop(robot_id)
+            self._drive_loop(ui["robot_key"])
         else:
             is_kicking = ui.get("is_kicking", False)
             kick_val = 1 if is_kicking else 0
-            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=kick_val)
+            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=kick_val, target_ip=target_ip)
             ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
             ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
             ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
             ui["last_v_tuple"] = (0.0, 0.0, 0.0)
             if is_kicking:
-                self._drive_loop(robot_id)
+                self._drive_loop(ui["robot_key"])
 
-    def _drive_loop(self, robot_id):
-        ui = self.robots_ui.get(robot_id)
+    def _drive_loop(self, robot_key):
+        ui = self.robots_ui.get(robot_key)
         if not ui:
             return
 
+        robot_id = ui["robot_id"]
+        target_ip = ui["ip"]
         is_driving = ui.get("is_driving", False)
         is_kicking = ui.get("is_kicking", False)
 
         if not is_driving and not is_kicking:
-            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0)
+            self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0, target_ip=target_ip)
             ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
             ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
@@ -1027,7 +1115,7 @@ class RobotDashboard(ctk.CTk):
             else:
                 vx, vy, vw = 0.0, 0.0, 0.0
 
-            self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=kick_val)
+            self.network.send_motion_command(robot_id, vx, vy, vw, kick_h=kick_val, target_ip=target_ip)
             w_exp = calculate_omni4_inverse_kinematics(vx, vy, vw)
 
             # Evita reconfigurar os widgets CustomTkinter se a velocidade não se alterou
@@ -1040,12 +1128,51 @@ class RobotDashboard(ctk.CTk):
 
             ui["latest_motion"] = (vx, vy, vw)
             ui["latest_exp"] = w_exp
-            history = self.robots_history.setdefault(robot_id, RobotDataHistory())
-            history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"])
+            history = self.robots_history.setdefault(ui["robot_key"], RobotDataHistory())
+            history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"], ui.get("latest_loss_pct", 0.0))
         except:
             pass
 
-        ui["drive_timer_id"] = self.after(20, lambda: self._drive_loop(robot_id))
+        ui["drive_timer_id"] = self.after(20, lambda: self._drive_loop(ui["robot_key"]))
+
+    def _track_packet_sequence(self, ui, packet):
+        """Atualiza contadores de sequência e calcula perda de pacotes para o robô."""
+        seq_id = int(getattr(packet, "sequence_id", 0))
+        last_seq = ui.get("last_seq_id")
+        was_connected = ui.get("is_connected", False)
+
+        if last_seq is None or not was_connected or seq_id < last_seq:
+            ui["last_seq_id"] = seq_id
+            ui["rx_packets"] = ui.get("rx_packets", 0) + 1
+        else:
+            gap = seq_id - last_seq - 1
+            if gap > 0:
+                ui["lost_packets"] = ui.get("lost_packets", 0) + gap
+            ui["rx_packets"] = ui.get("rx_packets", 0) + 1
+            ui["last_seq_id"] = seq_id
+
+        rx = ui["rx_packets"]
+        lost = ui["lost_packets"]
+        total = rx + lost
+        ui["latest_loss_pct"] = (lost / total * 100.0) if total > 0 else 0.0
+
+    def _render_packet_sequence_label(self, ui):
+        lbl_pkt = ui.get("lbl_pkt")
+        if not lbl_pkt:
+            return
+        seq_id = ui.get("last_seq_id")
+        seq_str = str(seq_id) if seq_id is not None else "--"
+        lost = ui.get("lost_packets", 0)
+        loss_pct = ui.get("latest_loss_pct", 0.0)
+
+        if lost == 0:
+            color = "#a9dfbf"
+        elif loss_pct < 5.0:
+            color = "#f39c12"
+        else:
+            color = "#e74c3c"
+
+        lbl_pkt.configure(text=f"📡 Seq: {seq_str} | 📉 Perda: {lost} ({loss_pct:.1f}%)", text_color=color)
 
     def process_queue(self):
         robots_with_telemetry = set()
@@ -1055,24 +1182,44 @@ class RobotDashboard(ctk.CTk):
                 if isinstance(item, tuple) and item[0] == "ROBOT_DISCONNECTED":
                     self._handle_robot_disconnect(item[1])
                 else:
-                    ptype = item.WhichOneof("payload")
+                    if isinstance(item, tuple) and item[0] == "PACKET":
+                        _, client_ip, packet = item
+                    else:
+                        client_ip, packet = None, item
+
+                    ptype = packet.WhichOneof("payload")
                     if ptype == 'telemetry':
-                        self._process_telemetry_packet(item)
-                        robots_with_telemetry.add(item.robot_id)
+                        robot_key = self._process_telemetry_packet(packet, client_ip)
+                        robots_with_telemetry.add(robot_key)
                     elif ptype == 'alert':
-                        err_flags = int(item.alert)
-                        self._update_robot_status_badge(item.robot_id, err_flags, is_alert=True)
+                        ui = self._get_or_create_robot_panel(packet.robot_id, client_ip)
+                        self._track_packet_sequence(ui, packet)
+                        ui["last_packet_time"] = time.time()
+                        ui["is_connected"] = True
+                        self._render_packet_sequence_label(ui)
+                        err_flags = int(packet.alert)
+                        self._update_robot_status_badge(ui["robot_key"], err_flags, is_alert=True)
                     elif ptype == 'response':
-                        ui = self._get_or_create_robot_panel(item.robot_id)
-                        r = item.response
-                        v = r.text_value if r.text_value else str(getattr(r, 'value', ''))
+                        ui = self._get_or_create_robot_panel(packet.robot_id, client_ip)
+                        self._track_packet_sequence(ui, packet)
+                        ui["last_packet_time"] = time.time()
+                        ui["is_connected"] = True
+                        self._render_packet_sequence_label(ui)
+                        r = packet.response
+                        if r.text_value:
+                            v = r.text_value
+                        elif r.info_index == 3:
+                            val = getattr(r, 'value', 0.0)
+                            v = f"{int(val)} perdidos" if val == int(val) else f"{val:.2f}%"
+                        else:
+                            v = str(getattr(r, 'value', ''))
                         ui["lbl_resp"].configure(text=f"Resp: {v}", text_color="green")
             except Exception:
                 break
 
         # Renderiza os labels de texto da interface apenas UMA VEZ por ciclo por robô com o dado mais recente
-        for robot_id in robots_with_telemetry:
-            self._render_robot_telemetry_labels(robot_id)
+        for robot_key in robots_with_telemetry:
+            self._render_robot_telemetry_labels(robot_key)
 
         self._check_timeouts()
         self.after(50, self.process_queue)
@@ -1080,14 +1227,16 @@ class RobotDashboard(ctk.CTk):
     def _check_timeouts(self):
         """Verifica se algum robô previamente conectado excedeu o timeout de heartbeat."""
         now = time.time()
-        for robot_id, ui in self.robots_ui.items():
+        for robot_key, ui in list(self.robots_ui.items()):
             last_t = ui.get("last_packet_time")
             if last_t is not None and ui.get("is_connected", False):
                 if now - last_t > ROBOT_TIMEOUT_SECONDS:
-                    self._handle_robot_disconnect(robot_id)
+                    self._handle_robot_disconnect(robot_key)
 
-    def _process_telemetry_packet(self, packet):
-        ui = self._get_or_create_robot_panel(packet.robot_id)
+    def _process_telemetry_packet(self, packet, client_ip=None):
+        ui = self._get_or_create_robot_panel(packet.robot_id, client_ip)
+        robot_key = ui["robot_key"]
+        self._track_packet_sequence(ui, packet)
         ui["last_packet_time"] = time.time()
         ui["is_connected"] = True
 
@@ -1100,14 +1249,15 @@ class RobotDashboard(ctk.CTk):
         ui["latest_kicker"] = float(kicker_volts[0]) if kicker_volts else 0.0
 
         # Grava todos os pontos no histórico para o gráfico sem perdas
-        history = self.robots_history.setdefault(packet.robot_id, RobotDataHistory())
-        history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"])
+        history = self.robots_history.setdefault(robot_key, RobotDataHistory())
+        history.add_point(time.time(), ui["latest_bat"], ui["latest_kicker"], ui["latest_real"], ui["latest_exp"], ui["latest_motion"], ui["latest_loss_pct"])
 
         # Guarda a telemetria mais recente para renderização agregada
         ui["pending_telemetry_render"] = t
+        return robot_key
 
-    def _render_robot_telemetry_labels(self, robot_id):
-        ui = self.robots_ui.get(robot_id)
+    def _render_robot_telemetry_labels(self, robot_key):
+        ui = self.robots_ui.get(robot_key)
         if not ui or "pending_telemetry_render" not in ui:
             return
         t = ui.pop("pending_telemetry_render")
@@ -1128,9 +1278,10 @@ class RobotDashboard(ctk.CTk):
         y = getattr(t, 'yaw', 0.0)
         gz = getattr(t, 'gyro_z', 0.0)
         ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
+        self._render_packet_sequence_label(ui)
 
         err_flags = int(getattr(t, 'error_flags', 0))
-        self._update_robot_status_badge(robot_id, err_flags)
+        self._update_robot_status_badge(robot_key, err_flags)
 
 
 if __name__ == "__main__":
