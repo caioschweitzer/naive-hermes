@@ -37,7 +37,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_CRITICAL_BATTERY: {
         "name": "ERR_CRITICAL_BATTERY",
         "label": "Bateria Crítica",
-        "badge": "🪫 BAT CRÍTICA",
+        "badge": "BAT CRÍTICA",
         "severity": "critical",
         "fg_color": "#78281F",
         "text_color": "#FADBD8",
@@ -46,7 +46,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_KICKER_OVERVOLTAGE: {
         "name": "ERR_KICKER_OVERVOLTAGE",
         "label": "Sobretensão Chute",
-        "badge": "⚡ SOBRETENSÃO",
+        "badge": "SOBRETENSÃO",
         "severity": "critical",
         "fg_color": "#78281F",
         "text_color": "#FADBD8",
@@ -55,7 +55,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_ROBOT_FLIPPED: {
         "name": "ERR_ROBOT_FLIPPED",
         "label": "Robô Tombado",
-        "badge": "🔄 TOMBADO",
+        "badge": "TOMBADO",
         "severity": "critical",
         "fg_color": "#78281F",
         "text_color": "#FADBD8",
@@ -64,7 +64,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_STM32_TIMEOUT: {
         "name": "ERR_STM32_TIMEOUT",
         "label": "STM32 Timeout",
-        "badge": "🔌 STM32 TIMEOUT",
+        "badge": "STM32 TIMEOUT",
         "severity": "critical",
         "fg_color": "#78281F",
         "text_color": "#FADBD8",
@@ -73,7 +73,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_LOW_BATTERY: {
         "name": "ERR_LOW_BATTERY",
         "label": "Bateria Baixa",
-        "badge": "⚠️ BAT BAIXA",
+        "badge": "BAT BAIXA",
         "severity": "warning",
         "fg_color": "#7E5109",
         "text_color": "#FDEBD0",
@@ -82,7 +82,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_IMU_FAIL: {
         "name": "ERR_IMU_FAIL",
         "label": "Falha no MPU",
-        "badge": "🧭 MPU FAIL",
+        "badge": "MPU FAIL",
         "severity": "warning",
         "fg_color": "#7E5109",
         "text_color": "#FDEBD0",
@@ -91,7 +91,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_MOTOR_1_STALL: {
         "name": "ERR_MOTOR_1_STALL",
         "label": "Motor 1 Travado",
-        "badge": "🛑 STALL M1",
+        "badge": "STALL M1",
         "severity": "warning",
         "fg_color": "#6E2C00",
         "text_color": "#EDBB99",
@@ -100,7 +100,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_MOTOR_2_STALL: {
         "name": "ERR_MOTOR_2_STALL",
         "label": "Motor 2 Travado",
-        "badge": "🛑 STALL M2",
+        "badge": "STALL M2",
         "severity": "warning",
         "fg_color": "#6E2C00",
         "text_color": "#EDBB99",
@@ -109,7 +109,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_MOTOR_3_STALL: {
         "name": "ERR_MOTOR_3_STALL",
         "label": "Motor 3 Travado",
-        "badge": "🛑 STALL M3",
+        "badge": "STALL M3",
         "severity": "warning",
         "fg_color": "#6E2C00",
         "text_color": "#EDBB99",
@@ -118,7 +118,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_MOTOR_4_STALL: {
         "name": "ERR_MOTOR_4_STALL",
         "label": "Motor 4 Travado",
-        "badge": "🛑 STALL M4",
+        "badge": "STALL M4",
         "severity": "warning",
         "fg_color": "#6E2C00",
         "text_color": "#EDBB99",
@@ -127,7 +127,7 @@ ROBOT_ERRORS_CONFIG = {
     proto.ERR_BALL_SENSOR_DIRTY: {
         "name": "ERR_BALL_SENSOR_DIRTY",
         "label": "Sensor de Bola Sujo",
-        "badge": "⚽ SENSOR BOLA",
+        "badge": "SENSOR BOLA",
         "severity": "info",
         "fg_color": "#1B4F72",
         "text_color": "#D4E6F1",
@@ -164,7 +164,7 @@ def parse_robot_error_flags(error_flags: int):
                 active_errors.append({
                     "name": name,
                     "label": name.replace("ERR_", "").replace("_", " "),
-                    "badge": f"⚠️ {name.replace('ERR_', '')}",
+                    "badge": f"{name.replace('ERR_', '')}",
                     "severity": "warning",
                     "fg_color": "#7E5109",
                     "text_color": "#FDEBD0",
@@ -176,7 +176,7 @@ def parse_robot_error_flags(error_flags: int):
             active_errors.append({
                 "name": f"UNKNOWN_0x{unrecognized_bits:X}",
                 "label": f"Erro 0x{unrecognized_bits:X}",
-                "badge": f"⚠️ 0x{unrecognized_bits:X}",
+                "badge": f"0x{unrecognized_bits:X}",
                 "severity": "warning",
                 "fg_color": "#5D6D7E",
                 "text_color": "#EAECEE",
@@ -277,7 +277,7 @@ class RobotPlotWindow(ctk.CTkToplevel):
         self.master = master
 
         ip_label = self.robot_ip if self.robot_ip else "Sem IP"
-        self.title(f"📈 Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
+        self.title(f"Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
         self.geometry("800x520")
         self.minsize(550, 380)
 
@@ -294,7 +294,7 @@ class RobotPlotWindow(ctk.CTkToplevel):
         self.robot_key = new_key
         self.robot_id, self.robot_ip = new_key
         ip_label = self.robot_ip if self.robot_ip else "Sem IP"
-        self.title(f"📈 Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
+        self.title(f"Telemetria em Tempo Real - Robô ID {self.robot_id} ({ip_label})")
 
     def _build_ui(self):
         # Barra superior com controles
@@ -311,10 +311,10 @@ class RobotPlotWindow(ctk.CTkToplevel):
         self.cb_window.set("10s")
         self.cb_window.pack(side="left", padx=5)
 
-        self.btn_pause = ctk.CTkButton(ctrl_frame, text="⏸ Pausar", width=85, command=self._toggle_pause)
+        self.btn_pause = ctk.CTkButton(ctrl_frame, text="Pausar", width=85, command=self._toggle_pause)
         self.btn_pause.pack(side="left", padx=10)
 
-        ctk.CTkButton(ctrl_frame, text="🗑 Limpar", width=75, fg_color="#555555", hover_color="#333333",
+        ctk.CTkButton(ctrl_frame, text="Limpar", width=75, fg_color="#555555", hover_color="#333333",
                       command=self._clear_data).pack(side="left", padx=5)
 
         # Matplotlib Canvas com tema Dark
@@ -328,7 +328,7 @@ class RobotPlotWindow(ctk.CTkToplevel):
 
     def _toggle_pause(self):
         self.is_paused = not self.is_paused
-        self.btn_pause.configure(text="▶ Retomar" if self.is_paused else "⏸ Pausar")
+        self.btn_pause.configure(text="Retomar" if self.is_paused else "Pausar")
 
     def _clear_data(self):
         self.history.clear()
@@ -549,6 +549,12 @@ class RobotDashboard(ctk.CTk):
         self.geometry("1100x900")
         ctk.set_appearance_mode("dark")
 
+        # Fontes nativas seguras via CTkFont (evita fallback/crash no libXft do Linux com "Roboto")
+        self.font_title = ctk.CTkFont(size=18, weight="bold")
+        self.font_ip = ctk.CTkFont(size=12, weight="bold")
+        self.font_badge = ctk.CTkFont(size=11, weight="bold")
+        self.font_badge_sm = ctk.CTkFont(size=10, weight="bold")
+
         self.keys_pressed = {"w": False, "a": False, "s": False, "d": False, "q": False, "e": False}
         self._key_release_timers = {}
         self._last_entry_focus_time = 0.0
@@ -614,7 +620,7 @@ class RobotDashboard(ctk.CTk):
             ui["robot_key"] = key
             ui["ip"] = robot_ip
             if "lbl_ip" in ui and ui["lbl_ip"]:
-                ui["lbl_ip"].configure(text=f"🌐 {robot_ip}", text_color="#85C1E9")
+                ui["lbl_ip"].configure(text=f"IP: {robot_ip}", text_color="#85C1E9")
             self.robots_ui[key] = ui
 
             if waiting_key in self.robots_history:
@@ -741,13 +747,13 @@ class RobotDashboard(ctk.CTk):
         # Cabeçalho do robô com ID, IP, badges de status e botão do gráfico
         title_f = ctk.CTkFrame(panel, fg_color="transparent")
         title_f.pack(fill="x", padx=20, pady=(15, 5))
-        ctk.CTkLabel(title_f, text=f"🤖 Robô ID: {rid}", font=("Roboto", 18, "bold"), text_color="#1f6aa5").pack(side="left")
+        ctk.CTkLabel(title_f, text=f"Robô ID: {rid}", font=self.font_title, text_color="#1f6aa5").pack(side="left")
 
-        ip_text = f"🌐 {rip}" if rip else "🌐 IP: Aguardando..."
+        ip_text = f"IP: {rip}" if rip else "IP: Aguardando..."
         lbl_ip = ctk.CTkLabel(
             title_f,
             text=ip_text,
-            font=("Roboto", 12, "bold"),
+            font=self.font_ip,
             fg_color="#1B2631",
             text_color="#85C1E9" if rip else "#7F8C8D",
             corner_radius=6,
@@ -770,29 +776,29 @@ class RobotDashboard(ctk.CTk):
             "latest_real": [0.0, 0.0, 0.0, 0.0], "latest_bat": 0.0, "latest_kicker": 0.0
         }
 
-        ctk.CTkButton(title_f, text="📈 Abrir Gráfico", width=120, height=28, fg_color="#1f6aa5", hover_color="#144870",
+        ctk.CTkButton(title_f, text="Abrir Gráfico", width=120, height=28, fg_color="#1f6aa5", hover_color="#144870",
                       command=lambda: self._open_robot_plot(ui["robot_key"])).pack(side="right")
 
         # --- TELEMETRIA ---
         tele_f = ctk.CTkFrame(panel, fg_color="transparent")
         tele_f.pack(fill="x", padx=20)
 
-        lbl_bat = ctk.CTkLabel(tele_f, text="🔋 Bateria: -- V")
+        lbl_bat = ctk.CTkLabel(tele_f, text="Bateria: -- V")
         lbl_bat.grid(row=0, column=0, sticky="w", padx=(0, 20))
 
-        lbl_ball = ctk.CTkLabel(tele_f, text="⚽ Sensor: --")
+        lbl_ball = ctk.CTkLabel(tele_f, text="Sensor: --")
         lbl_ball.grid(row=0, column=1, sticky="w", padx=(0, 20))
 
-        lbl_wheels = ctk.CTkLabel(tele_f, text="⚙️ Rodas Real: [--]")
+        lbl_wheels = ctk.CTkLabel(tele_f, text="Rodas Real: [--]")
         lbl_wheels.grid(row=0, column=2, sticky="w", padx=(0, 20))
 
-        lbl_exp = ctk.CTkLabel(tele_f, text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s", text_color="#5dade2")
+        lbl_exp = ctk.CTkLabel(tele_f, text="Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s", text_color="#5dade2")
         lbl_exp.grid(row=0, column=3, sticky="w")
 
-        lbl_imu = ctk.CTkLabel(tele_f, text="🧭 IMU: Roll: -- | Pitch: -- | Yaw: -- | Gyro Z: --")
+        lbl_imu = ctk.CTkLabel(tele_f, text="IMU: Roll: -- | Pitch: -- | Yaw: -- | Gyro Z: --")
         lbl_imu.grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 0))
 
-        lbl_pkt = ctk.CTkLabel(tele_f, text="📡 Seq: -- | 📉 Perda: 0 (0.0%)", text_color="#a9dfbf")
+        lbl_pkt = ctk.CTkLabel(tele_f, text="Seq: -- | Perda: 0 (0.0%)", text_color="#a9dfbf")
         lbl_pkt.grid(row=1, column=3, sticky="w", pady=(2, 0))
 
         # --- CONFIGURAÇÃO E REQUESTS ---
@@ -819,7 +825,7 @@ class RobotDashboard(ctk.CTk):
         drive_f = ctk.CTkFrame(panel, fg_color="#2b2b2b", corner_radius=10)
         drive_f.pack(fill="x", padx=20, pady=(5, 15))
 
-        ctk.CTkLabel(drive_f, text="🎮 CONDUÇÃO WASD", font=("Roboto", 11, "bold")).grid(row=0, column=0, padx=10)
+        ctk.CTkLabel(drive_f, text="CONDUÇÃO WASD", font=self.font_badge).grid(row=0, column=0, padx=10)
         ctk.CTkLabel(drive_f, text="Vel Max:").grid(row=0, column=1, padx=5)
         ent_speed = ctk.CTkEntry(drive_f, width=50)
         vcmd_speed = (self.register(lambda P: all(c in "0123456789." for c in P) and P.count(".") <= 1), "%P")
@@ -836,8 +842,8 @@ class RobotDashboard(ctk.CTk):
 
         btn_kicker = ctk.CTkButton(
             drive_f,
-            text="⚡ Kicker: OFF",
-            font=("Roboto", 11, "bold"),
+            text="Kicker: OFF",
+            font=self.font_badge,
             width=120,
             height=28,
             corner_radius=8,
@@ -858,8 +864,8 @@ class RobotDashboard(ctk.CTk):
         # Inicia aguardando conexão
         lbl_waiting = ctk.CTkLabel(
             badge_container,
-            text="⏳ AGUARDANDO",
-            font=("Roboto", 11, "bold"),
+            text="AGUARDANDO",
+            font=self.font_badge,
             fg_color="#2C3E50",
             text_color="#BDC3C7",
             corner_radius=8,
@@ -885,7 +891,7 @@ class RobotDashboard(ctk.CTk):
             ui["is_kicking"] = False
             btn = ui.get("btn_kicker")
             if btn:
-                btn.configure(text="⚡ Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
+                btn.configure(text="Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
         panel = ui["panel"]
         badge_container = ui["badge_container"]
 
@@ -894,8 +900,8 @@ class RobotDashboard(ctk.CTk):
 
         lbl_disc = ctk.CTkLabel(
             badge_container,
-            text="🔌 DESCONECTADO",
-            font=("Roboto", 11, "bold"),
+            text="DESCONECTADO",
+            font=self.font_badge,
             fg_color="#641E16",
             text_color="#FADBD8",
             corner_radius=8,
@@ -929,8 +935,8 @@ class RobotDashboard(ctk.CTk):
             # Estado normal: Badge verde discreto e sem borda de alerta
             lbl_ok = ctk.CTkLabel(
                 badge_container,
-                text="🟢 OK",
-                font=("Roboto", 11, "bold"),
+                text="OK",
+                font=self.font_badge,
                 fg_color="#143b23",
                 text_color="#2ecc71",
                 corner_radius=8,
@@ -957,8 +963,8 @@ class RobotDashboard(ctk.CTk):
             if is_alert:
                 lbl_alert_tag = ctk.CTkLabel(
                     badge_container,
-                    text="⚡ ALERTA",
-                    font=("Roboto", 10, "bold"),
+                    text="ALERTA",
+                    font=self.font_badge_sm,
                     fg_color="#922B21",
                     text_color="#FADBD8",
                     corner_radius=6,
@@ -973,7 +979,7 @@ class RobotDashboard(ctk.CTk):
                 b = ctk.CTkLabel(
                     badge_container,
                     text=err.get("badge", err.get("label", "ERRO")),
-                    font=("Roboto", 11, "bold"),
+                    font=self.font_badge,
                     fg_color=err.get("fg_color", "#78281F"),
                     text_color=err.get("text_color", "#FFFFFF"),
                     corner_radius=8,
@@ -987,7 +993,7 @@ class RobotDashboard(ctk.CTk):
                 b_more = ctk.CTkLabel(
                     badge_container,
                     text=f"+{remaining}",
-                    font=("Roboto", 10, "bold"),
+                    font=self.font_badge_sm,
                     fg_color="#424949",
                     text_color="#E5E8E8",
                     corner_radius=8,
@@ -1020,9 +1026,9 @@ class RobotDashboard(ctk.CTk):
         btn = ui.get("btn_kicker")
         if btn:
             if is_kicking:
-                btn.configure(text="⚡ Kicker: ATIVO", fg_color="#c0392b", hover_color="#e74c3c")
+                btn.configure(text="Kicker: ATIVO", fg_color="#c0392b", hover_color="#e74c3c")
             else:
-                btn.configure(text="⚡ Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
+                btn.configure(text="Kicker: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
 
         self.focus_set()
 
@@ -1065,7 +1071,7 @@ class RobotDashboard(ctk.CTk):
             kick_val = 1 if is_kicking else 0
             self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=kick_val, target_ip=target_ip)
             ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
-            ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
+            ui["lbl_expected_wheels"].configure(text="Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
             ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
             ui["last_v_tuple"] = (0.0, 0.0, 0.0)
@@ -1085,7 +1091,7 @@ class RobotDashboard(ctk.CTk):
         if not is_driving and not is_kicking:
             self.network.send_motion_command(robot_id, 0, 0, 0, kick_h=0, target_ip=target_ip)
             ui["lbl_current_v"].configure(text="Vx: 0.0 | Vy: 0.0 | Vw: 0.0")
-            ui["lbl_expected_wheels"].configure(text="🎯 Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
+            ui["lbl_expected_wheels"].configure(text="Rodas Exp: [M1: 0.0, M2: 0.0, M3: 0.0, M4: 0.0] rad/s")
             ui["latest_motion"] = (0.0, 0.0, 0.0)
             ui["latest_exp"] = [0.0, 0.0, 0.0, 0.0]
             ui["last_v_tuple"] = (0.0, 0.0, 0.0)
@@ -1124,7 +1130,7 @@ class RobotDashboard(ctk.CTk):
                 ui["last_v_tuple"] = current_v_tuple
                 ui["lbl_current_v"].configure(text=f"Vx: {vx:.1f} | Vy: {vy:.1f} | Vw: {vw:.1f}")
                 w_str = f"M1: {w_exp[0]:+.1f}, M2: {w_exp[1]:+.1f}, M3: {w_exp[2]:+.1f}, M4: {w_exp[3]:+.1f}"
-                ui["lbl_expected_wheels"].configure(text=f"🎯 Rodas Exp: [{w_str}] rad/s")
+                ui["lbl_expected_wheels"].configure(text=f"Rodas Exp: [{w_str}] rad/s")
 
             ui["latest_motion"] = (vx, vy, vw)
             ui["latest_exp"] = w_exp
@@ -1172,7 +1178,7 @@ class RobotDashboard(ctk.CTk):
         else:
             color = "#e74c3c"
 
-        lbl_pkt.configure(text=f"📡 Seq: {seq_str} | 📉 Perda: {lost} ({loss_pct:.1f}%)", text_color=color)
+        lbl_pkt.configure(text=f"Seq: {seq_str} | Perda: {lost} ({loss_pct:.1f}%)", text_color=color)
 
     def process_queue(self):
         robots_with_telemetry = set()
@@ -1263,21 +1269,25 @@ class RobotDashboard(ctk.CTk):
         t = ui.pop("pending_telemetry_render")
 
         bat = ui["latest_bat"]
-        ui["lbl_bat"].configure(text=f"🔋 Bateria: {bat:.2f} V")
-        ui["lbl_ball"].configure(text=f"⚽ Sensor: {'🟢 Sim' if getattr(t, 'ball_sensor', False) else '🔴 Não'}")
+        ui["lbl_bat"].configure(text=f"Bateria: {bat:.2f} V")
+        has_ball = bool(getattr(t, 'ball_sensor', False))
+        ui["lbl_ball"].configure(
+            text=f"Sensor: {'Sim' if has_ball else 'Não'}",
+            text_color="#2ecc71" if has_ball else "#e74c3c"
+        )
 
         wheels = ui["latest_real"]
         if wheels and any(w != 0.0 for w in wheels):
             wheels_str = ", ".join([f"{w:.2f}" for w in wheels])
-            ui["lbl_wheels"].configure(text=f"⚙️ Rodas Real: [{wheels_str}]")
+            ui["lbl_wheels"].configure(text=f"Rodas Real: [{wheels_str}]")
         else:
-            ui["lbl_wheels"].configure(text="⚙️ Rodas Real: [--]")
+            ui["lbl_wheels"].configure(text="Rodas Real: [--]")
 
         r = getattr(t, 'roll', 0.0)
         p = getattr(t, 'pitch', 0.0)
         y = getattr(t, 'yaw', 0.0)
         gz = getattr(t, 'gyro_z', 0.0)
-        ui["lbl_imu"].configure(text=f"🧭 IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
+        ui["lbl_imu"].configure(text=f"IMU: Roll: {r:.2f} | Pitch: {p:.2f} | Yaw: {y:.2f} | Gyro Z: {gz:.2f}")
         self._render_packet_sequence_label(ui)
 
         err_flags = int(getattr(t, 'error_flags', 0))
