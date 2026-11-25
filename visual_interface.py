@@ -538,9 +538,6 @@ class RobotInterface:
                 except Exception:
                     continue
 
-    def broadcast_TCP_IP(self, ip: str):
-        self.send_config_command(0xFF, 1, ip)
-
 
 class RobotDashboard(ctk.CTk):
     def __init__(self):
@@ -582,7 +579,12 @@ class RobotDashboard(ctk.CTk):
             "2 - Solicitar Telemetria": 2,
             "3 - Perda de Pacotes": 3
         }
-        self.config_options = {"0 - Novo ID": 0, "1 - IP TCP": 1, "2 - Porta TCP": 2, "3 - Porta UDP": 3}
+        self.config_options = {
+            "0 - Novo ID": 0,
+            "4 - PID Kp": 4,
+            "5 - PID Ki": 5,
+            "6 - PID Kd": 6,
+        }
 
         self._build_header()
         self.scrollable_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -701,7 +703,6 @@ class RobotDashboard(ctk.CTk):
         header_frame.pack(fill="x", padx=20, pady=(20, 10))
 
         vcmd_int = (self.register(lambda P: P.isdigit() or P == ""), "%P")
-        vcmd_ip = (self.register(lambda P: all(c in "0123456789." for c in P) and P.count(".") <= 3), "%P")
 
         ctk.CTkLabel(header_frame, text="Adicionar Robô (ID):").pack(side="left", padx=15, pady=15)
         self.entry_new_robot = ctk.CTkEntry(header_frame, width=80)
@@ -710,22 +711,11 @@ class RobotDashboard(ctk.CTk):
         self.entry_new_robot.bind("<Return>", lambda e: self._add_robot_manual())
         ctk.CTkButton(header_frame, text="Adicionar Painel", command=self._add_robot_manual).pack(side="left", padx=10)
 
-        # Separador visual
-        ctk.CTkLabel(header_frame, text="|", text_color="gray").pack(side="left", padx=10)
-
-        # Campo de IP e botão de broadcast
-        ctk.CTkLabel(header_frame, text="IP TCP:").pack(side="left", padx=(5, 5), pady=15)
-        self.entry_tcp_ip = ctk.CTkEntry(header_frame, width=130, placeholder_text="192.168.0.100")
-        self.entry_tcp_ip._entry.configure(validate="key", validatecommand=vcmd_ip)
-        self.entry_tcp_ip.pack(side="left", padx=5)
-        self.entry_tcp_ip.bind("<Return>", lambda e: (self._broadcast_tcp_ip(), self.focus_set()))
-        ctk.CTkButton(header_frame, text="Broadcast IP", command=self._broadcast_tcp_ip).pack(side="left", padx=10)
-
-    def _broadcast_tcp_ip(self):
-        ip = self.entry_tcp_ip.get().strip()
-        if ip:
-            self.network.broadcast_TCP_IP(ip)
-        self.focus_set()
+        ctk.CTkLabel(
+            header_frame,
+            text="|  Rede fixa ESP32: UDP TX :5000 / RX 192.168.142.67:5001",
+            text_color="gray"
+        ).pack(side="left", padx=10)
 
     def _add_robot_manual(self):
         robot_id = self.entry_new_robot.get().strip()
@@ -1017,26 +1007,46 @@ class RobotDashboard(ctk.CTk):
                 b_more.pack(side="left", padx=2)
 
     def _send_config(self, robot_key, cb_text, val_str):
-        if not val_str: return
+        val_str = val_str.strip()
+        if not val_str:
+            return
         ui = self.robots_ui.get(robot_key)
-        if not ui: return
+        if not ui:
+            return
         p_id = self.config_options[cb_text]
+        normalized = val_str.replace(",", ".")
         try:
-            val = float(val_str) if ('.' in val_str or val_str.isdigit()) else val_str
-        except:
-            val = val_str
+            num = float(normalized)
+        except ValueError:
+            ui["lbl_resp"].configure(text="Valor inválido", text_color="#e74c3c")
+            return
+
+        if not math.isfinite(num) or num < 0.0:
+            ui["lbl_resp"].configure(text="Valor deve ser >= 0", text_color="#e74c3c")
+            return
+
+        if p_id == 0:
+            if not num.is_integer() or int(num) > 15:
+                ui["lbl_resp"].configure(text="ID deve ser 0..15", text_color="#e74c3c")
+                return
+            val = int(num)
+        else:
+            val = num
+
         self.network.send_config_command(ui["robot_id"], p_id, val, target_ip=ui["ip"])
+        ui["lbl_resp"].configure(text=f"Config {p_id} enviada: {val}", text_color="#85C1E9")
 
     def _toggle_kicker(self, robot_key, channel="h"):
         ui = self.robots_ui.get(robot_key)
         if not ui:
             return
 
-        state_key, btn_key, label = (
-            ("is_chipkicking", "btn_chipkicker", "Chipkicker")
-            if channel == "v"
-            else ("is_kicking", "btn_kicker", "Kicker")
-        )
+        if channel == "v":
+            state_key, btn_key, label = ("is_chipkicking", "btn_chipkicker", "Chipkicker")
+            other_state_key, other_btn_key, other_label = ("is_kicking", "btn_kicker", "Kicker")
+        else:
+            state_key, btn_key, label = ("is_kicking", "btn_kicker", "Kicker")
+            other_state_key, other_btn_key, other_label = ("is_chipkicking", "btn_chipkicker", "Chipkicker")
 
         robot_id = ui["robot_id"]
         target_ip = ui["ip"]
@@ -1049,6 +1059,13 @@ class RobotDashboard(ctk.CTk):
                 btn.configure(text=f"{label}: ATIVO", fg_color="#c0392b", hover_color="#e74c3c")
             else:
                 btn.configure(text=f"{label}: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
+
+        # STM32 dispara o horizontal primeiro e descarta o vertical; manter exclusividade na UI
+        if active and ui.get(other_state_key, False):
+            ui[other_state_key] = False
+            other_btn = ui.get(other_btn_key)
+            if other_btn:
+                other_btn.configure(text=f"{other_label}: OFF", fg_color="#3a3a3a", hover_color="#4a4a4a")
 
         self.focus_set()
 

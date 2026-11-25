@@ -1,117 +1,115 @@
 import socket
+import struct
 import threading
 import time
-import struct  # Necessário para converter IP para o campo float
 import proto.robot_comm_pb2 as proto
 
 
-
 class RobotInterface:
-    def __init__(self, UDP_IP = "255.255.255.255", UDP_PORT = 5000, TCP_IP = "0.0.0.0", TCP_PORT = 5001):
+    def __init__(self, UDP_IP="192.168.142.255", UDP_PORT=5000, RX_UDP_IP="0.0.0.0", RX_UDP_PORT=5001):
         self.running = True
         self.UDP_IP = UDP_IP
         self.UDP_PORT = UDP_PORT
-        self.TCP_IP = TCP_IP
-        self.TCP_PORT = TCP_PORT
+        self.RX_UDP_IP = RX_UDP_IP
+        self.RX_UDP_PORT = RX_UDP_PORT
+        self._tx_seq_counters = {}
+
         # Setup UDP (Sender)
         self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-        # Iniciar Thread de Telemetria (TCP Server)
-        self.tcp_thread = threading.Thread(target=self._tcp_server_task)
-        self.tcp_thread.daemon = True
-        self.tcp_thread.start()
+        # Iniciar Thread de Telemetria/Respostas/Alertas (UDP Receiver)
+        self.rx_thread = threading.Thread(target=self._udp_rx_server_task, daemon=True)
+        self.rx_thread.start()
 
-    def send_motion_command(self, robot_id, vx, vy, vw, kick_h=0, kick_v=0):
+    def _send_udp_packet(self, packet, target_ip=None):
+        dest_ip = target_ip if target_ip else self.UDP_IP
+        seq_key = (int(packet.robot_id), dest_ip)
+        next_seq = (self._tx_seq_counters.get(seq_key, 0) + 1) & 0xFFFFFFFF
+        self._tx_seq_counters[seq_key] = next_seq
+        packet.sequence_id = next_seq
+
+        msg = packet.SerializeToString()
+        self.udp_sock.sendto(msg, (dest_ip, self.UDP_PORT))
+
+    def send_motion_command(self, robot_id, vx, vy, vw, kick_h=0, kick_v=0, target_ip=None):
         """Envia comando de movimentação para um robô específico via UDP"""
         packet = proto.RobotPacket()
-        packet.robot_id = robot_id
+        packet.robot_id = int(robot_id)
 
-        packet.motion.vel_x = vx
-        packet.motion.vel_y = vy
-        packet.motion.vel_w = vw
-        packet.motion.kick_h = kick_h
-        packet.motion.kick_v = kick_v
+        packet.motion.vel_x = float(vx)
+        packet.motion.vel_y = float(vy)
+        packet.motion.vel_w = float(vw)
+        packet.motion.kick_h = int(kick_h)
+        packet.motion.kick_v = int(kick_v)
 
-        msg = packet.SerializeToString()
-        self.udp_sock.sendto(msg, (self.UDP_IP, self.UDP_PORT))
+        self._send_udp_packet(packet, target_ip=target_ip)
         print(f"[UDP] Comando de Movimento enviado para Robô {robot_id}")
 
-    def send_info_request(self, robot_id, info_index):
-        """Solicita informações (IP, MAC, etc) via UDP"""
+    def send_info_request(self, robot_id, info_index, target_ip=None):
+        """Solicita informações (0=IP, 1=MAC, 2=Telemetria, 3=Perda de pacotes) via UDP"""
         packet = proto.RobotPacket()
-        packet.robot_id = robot_id
-        packet.request.info_index = info_index
+        packet.robot_id = int(robot_id)
+        packet.request.info_index = int(info_index)
 
-        msg = packet.SerializeToString()
-        self.udp_sock.sendto(msg, (self.UDP_IP, self.UDP_PORT))
+        self._send_udp_packet(packet, target_ip=target_ip)
         print(f"[UDP] Request (index {info_index}) enviado para Robô {robot_id}")
 
-    def send_config_command(self, robot_id, param_id, value):
+    def send_config_command(self, robot_id, param_id, value, target_ip=None):
         """
-        Envia configurações para o robô.
-        Se 'value' for string, preenche text_value. Se for número, preenche value.
+        Envia configurações para o robô (0=Novo ID, 4=PID Kp, 5=PID Ki, 6=PID Kd).
         """
         packet = proto.RobotPacket()
-        packet.robot_id = robot_id
-        packet.config.param_id = param_id
+        packet.robot_id = int(robot_id)
+        packet.config.param_id = int(param_id)
 
         if isinstance(value, str):
             packet.config.text_value = value
         else:
             packet.config.value = float(value)
 
-        msg = packet.SerializeToString()
-        self.udp_sock.sendto(msg, (self.UDP_IP, self.UDP_PORT))
+        self._send_udp_packet(packet, target_ip=target_ip)
         print(f"[UDP] Config {param_id} enviada: {value}")
 
-    def _tcp_server_task(self):
-        """Servidor TCP que recebe telemetria e respostas dos robôs"""
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((self.TCP_IP, self.TCP_PORT))
-        server.listen(5)
-        print(f"[TCP] Servidor ativo na porta {self.TCP_PORT}...")
+    def _udp_rx_server_task(self):
+        """Receptor UDP que recebe telemetria, respostas e alertas dos robôs"""
+        rx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        rx_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        rx_sock.bind((self.RX_UDP_IP, self.RX_UDP_PORT))
+        rx_sock.settimeout(1.0)
+        print(f"[UDP RX] Escutando telemetria na porta {self.RX_UDP_PORT}...")
 
-        while self.running:
-            client, addr = server.accept()
-            threading.Thread(target=self._handle_robot_client, args=(client, addr)).start()
-
-    def _handle_robot_client(self, client_socket, addr):
-        print(f"[TCP] Conexão estabelecida com {addr}")
-        with client_socket:
+        with rx_sock:
             while self.running:
                 try:
-                    # 1. Lê os primeiros 4 bytes para saber o tamanho da mensagem (Little Endian)
-                    raw_msg_len = client_socket.recv(4)
-                    if not raw_msg_len: break
-
-                    msg_len = struct.unpack('<I', raw_msg_len)[0]
-
-                    # 2. Lê exatamente a quantidade de bytes informada
-                    data = b''
-                    while len(data) < msg_len:
-                        chunk = client_socket.recv(msg_len - len(data))
-                        if not chunk: break
-                        data += chunk
+                    data, addr = rx_sock.recvfrom(4096)
+                    if not data:
+                        continue
 
                     packet = proto.RobotPacket()
-                    packet.ParseFromString(data)
-                    payload_type = packet.WhichOneof("payload")
+                    if len(data) > 4 and struct.unpack('<I', data[:4])[0] == len(data) - 4:
+                        try:
+                            packet.ParseFromString(data[4:])
+                            if packet.WhichOneof("payload") is None:
+                                packet.ParseFromString(data)
+                        except Exception:
+                            packet.ParseFromString(data)
+                    else:
+                        packet.ParseFromString(data)
 
+                    payload_type = packet.WhichOneof("payload")
                     if payload_type == 'telemetry':
                         pass  # Processar telemetria
+                    elif payload_type == 'alert':
+                        print(f"[ALERTA] Robô {packet.robot_id} ({addr[0]}): flags=0x{packet.alert:04X}")
                     elif payload_type == 'response':
                         r = packet.response
-                        print(f"[RESPOSTA] Índice {r.info_index}: {r.text_value or r.value}")
+                        print(f"[RESPOSTA] Robô {packet.robot_id} ({addr[0]}) Índice {r.info_index}: {r.text_value or r.value}")
 
+                except socket.timeout:
+                    continue
                 except Exception as e:
-                    print(f"[ERRO TCP] Falha ao processar dados de {addr}: {e}")
-                    break
-
-    def broadcast_network_config(self):
-        self.send_config_command(0xFF, 1, "192.168.168.102")
-
+                    print(f"[ERRO UDP RX] Falha ao processar dados: {e}")
 
 
 # --- Exemplo de Uso ---
@@ -120,18 +118,16 @@ if __name__ == "__main__":
 
     try:
         time.sleep(1)
-        robot.send_config_command(robot_id=0, param_id=1, value="192.168.168.102")
-
-        time.sleep(0.5)
-        robot.send_config_command(robot_id=0, param_id=2, value=5001)
-        robot.send_config_command(robot_id=2, param_id=0, value=16)
+        # Exemplo: ajustar ganhos PID globais do robô 0 (4=Kp, 5=Ki, 6=Kd)
+        robot.send_config_command(robot_id=0, param_id=4, value=0.08)
+        robot.send_config_command(robot_id=0, param_id=5, value=0.20)
+        robot.send_config_command(robot_id=0, param_id=6, value=0.00)
 
         while True:
-            robot.send_motion_command(robot_id=15, vx=0.2, vy=0.0, vw=0.0)
+            robot.send_motion_command(robot_id=0, vx=0.2, vy=0.0, vw=0.0)
             time.sleep(2)
-            robot.send_info_request(robot_id=15, info_index=1)
+            robot.send_info_request(robot_id=0, info_index=1)
             time.sleep(2)
-
 
     except KeyboardInterrupt:
         robot.running = False
